@@ -1,4 +1,4 @@
-import path from 'node:path'
+import path from 'node:path/posix'
 import type { ImageFormat } from './formats.ts'
 
 /**
@@ -9,10 +9,11 @@ import type { ImageFormat } from './formats.ts'
  * @returns Image variant file path.
  */
 export function renameImagePath(imagePath: string, postfix: string, format: ImageFormat) {
+  // Posix separators, so variant paths are stable across platforms.
   const {
     dir,
     name
-  } = path.parse(imagePath)
+  } = path.parse(imagePath.replaceAll('\\', '/'))
 
   return path.format({
     dir,
