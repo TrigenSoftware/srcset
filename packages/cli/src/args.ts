@@ -14,7 +14,7 @@ export const usage = `srcset [...sources] [...options]
   sources               Source image(s) glob patterns.
   --help, -h            Print this message.
   --verbose, -v         Print processed images.
-  --match, -m           Glob pattern(s) or media query(ies) to match images by name or size.
+  --match, -m           Glob pattern(s) or media query(ies) to match images by name or size. Multiple values must all match.
   --width, -w           Output image(s) widths to resize, value less than or equal to 1 is treated as a multiplier.
   --format, -f          Output image(s) formats to convert.
   --skip-optimization   Do not optimize output images.

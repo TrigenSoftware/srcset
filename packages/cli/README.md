@@ -53,7 +53,7 @@ npm i -D @srcset/cli
 npx srcset "src/images/*.jpg" --width 1920,1280,860,320 --format avif,webp,jpg -d static/images
 ```
 
-Or with the `srcset.config.js` configuration file:
+Or with the `srcset.config.js` configuration file - an ES module, so set `"type": "module"` in your `package.json` or pass an `.mjs` file via `--config`:
 
 ```js
 export default {
