@@ -6,12 +6,16 @@ export const fixtureHeight = 480
 
 const channels = 3
 const colorDepth = 256
+// Deterministic LCG, so fixtures are reproducible between runs.
+let seed = 1
 
 function createNoise(width: number, height: number) {
   const data = Buffer.alloc(width * height * channels)
 
   for (let i = 0; i < data.length; i++) {
-    data[i] = Math.floor(Math.random() * colorDepth)
+    seed = (seed * 1664525 + 1013904223) % 4294967296
+    // The upper bits: the low LCG bits cycle with a short period.
+    data[i] = Math.floor(seed / 16777216) % colorDepth
   }
 
   return data

@@ -28,7 +28,8 @@ export type MatcherFunction = (path: string, size: ImageSize, source: ImageSourc
  */
 export type Matcher = string | MatcherFunction
 
-const mediaQueryPattern = /\(\s*([^\s:)]+)\s*(?::\s*([^\s)]+))?\s*\)/
+// Size feature query, like `(min-width: 100px)`: parenthesized globs, e.g. extglobs, are not media queries.
+const mediaQueryPattern = /\(\s*((?:min-|max-)?(?:width|height))\s*(?::\s*([^\s)]+))?\s*\)/
 
 /**
  * Match image file by path and size.
