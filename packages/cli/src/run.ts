@@ -9,7 +9,8 @@ import {
   join,
   relative,
   basename,
-  resolve
+  resolve,
+  sep
 } from 'node:path'
 import {
   SrcSetGenerator,
@@ -18,10 +19,12 @@ import {
 import { glob } from 'tinyglobby'
 import type { SrcSetCliOptions } from './types.ts'
 
+const outsidePattern = new RegExp(`^\\.\\.(?:\\${sep}|$)`)
+
 function toOutputPath(dest: string, path: string) {
   const relativePath = relative(process.cwd(), path)
 
-  return join(dest, relativePath.startsWith('..') || isAbsolute(relativePath) ? basename(path) : relativePath)
+  return join(dest, outsidePattern.test(relativePath) || isAbsolute(relativePath) ? basename(path) : relativePath)
 }
 
 /**
