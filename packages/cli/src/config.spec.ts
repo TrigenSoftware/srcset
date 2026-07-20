@@ -4,6 +4,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import process from 'node:process'
 import {
   describe,
   it,
@@ -27,7 +28,16 @@ describe('cli', () => {
       })
 
       it('should return empty object without config', async () => {
-        expect(await loadConfig()).toEqual({})
+        const dir = await mkdtemp(join(tmpdir(), 'srcset-cli-'))
+        const cwd = process.cwd()
+
+        process.chdir(dir)
+
+        try {
+          expect(await loadConfig()).toEqual({})
+        } finally {
+          process.chdir(cwd)
+        }
       })
     })
   })

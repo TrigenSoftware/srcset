@@ -5,6 +5,7 @@ import {
 } from 'node:fs/promises'
 import {
   dirname,
+  isAbsolute,
   join,
   relative,
   basename,
@@ -20,7 +21,7 @@ import type { SrcSetCliOptions } from './types.ts'
 function toOutputPath(dest: string, path: string) {
   const relativePath = relative(process.cwd(), path)
 
-  return join(dest, relativePath.startsWith('..') ? basename(path) : relativePath)
+  return join(dest, relativePath.startsWith('..') || isAbsolute(relativePath) ? basename(path) : relativePath)
 }
 
 /**
