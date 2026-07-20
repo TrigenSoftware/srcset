@@ -2,7 +2,7 @@
   "name": "srcset",
   "type": "module",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Highly customizable tools for generating responsive images with webpack, Rspack and Vite.",
   "author": "dangreen",
   "license": "MIT",
