@@ -1,0 +1,69 @@
+name: Tests
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  types:
+    runs-on: ubuntu-latest
+    name: types
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Check types
+        run: pnpm test:types
+  lint:
+    runs-on: ubuntu-latest
+    name: lint
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Lint files
+        run: pnpm lint
+  unit:
+    runs-on: ubuntu-latest
+    name: unit
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Run tests
+        run: pnpm test:unit
+      - name: Collect coverage
+        uses: coverallsapp/github-action@main
+        if: success()
+        with:
+          fail-on-error: false

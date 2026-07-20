@@ -1,0 +1,52 @@
+name: Checks
+on:
+  pull_request:
+    branches:
+      - main
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    name: size-limit
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Build packages
+        run: pnpm build
+      - name: Check size
+        run: pnpm test:size
+  editorconfig:
+    runs-on: ubuntu-latest
+    name: editorconfig
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+      - name: Check editorconfig
+        uses: editorconfig-checker/action-editorconfig-checker@main
+  package-json:
+    runs-on: ubuntu-latest
+    name: package.json
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Check package.json files
+        run: pnpm --package=@trigen/lint-package-json dlx lint-package-json --monorepo

@@ -1,0 +1,56 @@
+{
+  "name": "srcset",
+  "type": "module",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Highly customizable tools for generating responsive images with webpack, Rspack and Vite.",
+  "author": "dangreen",
+  "license": "MIT",
+  "homepage": "https://srcset.js.org",
+  "funding": "https://ko-fi.com/dangreen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TrigenSoftware/srcset.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TrigenSoftware/srcset/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "clear": "pnpm -r --parallel clear",
+    "build": "pnpm -r --parallel build",
+    "lint": "pnpm -r --parallel --if-present lint",
+    "format": "pnpm -r --parallel --if-present format",
+    "test:unit": "pnpm -r --parallel --if-present test:unit",
+    "test:size": "pnpm -r --parallel --if-present test:size",
+    "test:types": "pnpm -r --parallel --if-present test:types",
+    "test": "run -p lint test:unit test:types",
+    "commit": "cz",
+    "updateGitHooks": "simple-git-hooks",
+    "docs:dev": "pnpm -F website dev",
+    "docs:build": "pnpm -F website build"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.0.0",
+    "@commitlint/config-conventional": "^21.0.0",
+    "@commitlint/config-pnpm-scopes": "^21.0.0",
+    "@commitlint/cz-commitlint": "^21.0.0",
+    "@trigen/oxlint": "^10.1.1",
+    "@trigen/oxlint-config": "^10.1.2",
+    "@trigen/scripts": "^10.1.1",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^4.1.9",
+    "clean-publish": "^5.0.0",
+    "commitizen": "^4.3.1",
+    "del-cli": "^7.0.0",
+    "nano-staged": "^1.0.0",
+    "oxlint": "^1.71.0",
+    "oxlint-tsgolint": "^0.25.0",
+    "simple-git-hooks": "^2.13.1",
+    "typescript": "^7.0.0",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
+  }
+}

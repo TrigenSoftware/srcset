@@ -1,0 +1,14 @@
+{
+  "project": ["@simple-release/pnpm#PnpmWorkspacesProject", {
+    "mode": "fixed"
+  }],
+  "releaser": {
+    "verbose": true
+  },
+  "pullRequest": {
+    "draft": true
+  },
+  "publish": {
+    "access": "public"
+  }
+}
