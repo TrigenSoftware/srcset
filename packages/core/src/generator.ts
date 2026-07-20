@@ -315,6 +315,6 @@ export class SrcSetGenerator {
       return contents
     }
 
-    return Buffer.from(await optimize(contents, format))
+    return optimize(contents, format)
   }
 }
