@@ -1,0 +1,60 @@
+import {
+  mkdtemp,
+  writeFile
+} from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
+import {
+  describe,
+  it,
+  expect
+} from 'vitest'
+import { loadConfig } from './config.ts'
+
+describe('cli', () => {
+  describe('config', () => {
+    describe('loadConfig', () => {
+      it('should load config module by path', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'srcset-cli-'))
+        const file = join(dir, 'srcset.config.js')
+
+        await writeFile(file, 'export default { dest: "dist", skipOptimization: true }\n')
+
+        expect(await loadConfig(file)).toEqual({
+          dest: 'dist',
+          skipOptimization: true
+        })
+      })
+
+      it('should look up srcset.config.js in the current directory', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'srcset-cli-'))
+        const cwd = process.cwd()
+
+        await writeFile(join(dir, 'srcset.config.js'), 'export default { dest: "out" }\n')
+        process.chdir(dir)
+
+        try {
+          expect(await loadConfig()).toEqual({
+            dest: 'out'
+          })
+        } finally {
+          process.chdir(cwd)
+        }
+      })
+
+      it('should return empty object without config', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'srcset-cli-'))
+        const cwd = process.cwd()
+
+        process.chdir(dir)
+
+        try {
+          expect(await loadConfig()).toEqual({})
+        } finally {
+          process.chdir(cwd)
+        }
+      })
+    })
+  })
+})

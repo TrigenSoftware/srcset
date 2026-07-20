@@ -1,0 +1,119 @@
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  writeFile
+} from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
+import {
+  describe,
+  it,
+  expect
+} from 'vitest'
+import sharp from 'sharp'
+import { run } from './run.ts'
+
+async function createProject() {
+  const dir = await mkdtemp(join(tmpdir(), 'srcset-cli-'))
+  const contents = await sharp({
+    create: {
+      width: 640,
+      height: 480,
+      channels: 3,
+      background: '#3a7bd5'
+    }
+  }).jpeg().toBuffer()
+
+  await mkdir(join(dir, 'images'))
+  await writeFile(join(dir, 'images/photo.jpg'), contents)
+
+  return dir
+}
+
+async function runIn(dir: string, options: Parameters<typeof run>[0]) {
+  const cwd = process.cwd()
+
+  process.chdir(dir)
+
+  try {
+    return await run(options)
+  } finally {
+    process.chdir(cwd)
+  }
+}
+
+describe('cli', () => {
+  describe('run', () => {
+    it('should generate variants to the destination directory', async () => {
+      const dir = await createProject()
+      const written = await runIn(dir, {
+        src: 'images/**/*.jpg',
+        dest: 'dist',
+        skipOptimization: true,
+        rules: [
+          {
+            width: [1, 0.5],
+            format: ['webp', 'jpg']
+          }
+        ]
+      })
+
+      expect(written.length).toBe(4)
+      expect((await readdir(join(dir, 'dist/images'))).sort()).toEqual([
+        'photo.jpg',
+        'photo.webp',
+        'photo@320w.jpg',
+        'photo@320w.webp'
+      ])
+    })
+
+    it('should skip rules not matching the image', async () => {
+      const dir = await createProject()
+      const written = await runIn(dir, {
+        src: 'images/**/*.jpg',
+        dest: 'dist',
+        skipOptimization: true,
+        rules: [
+          {
+            match: '**/*.png',
+            width: [0.5]
+          }
+        ]
+      })
+
+      expect(written).toEqual([])
+    })
+
+    it('should stop after only rule', async () => {
+      const dir = await createProject()
+      const written = await runIn(dir, {
+        src: 'images/**/*.jpg',
+        dest: 'dist',
+        skipOptimization: true,
+        rules: [
+          {
+            only: true,
+            width: [0.5]
+          },
+          {
+            width: [0.25]
+          }
+        ]
+      })
+
+      expect(written.length).toBe(1)
+      expect(written[0]).toContain('photo@320w.jpg')
+    })
+
+    it('should throw without matched sources', async () => {
+      const dir = await createProject()
+
+      await expect(runIn(dir, {
+        src: 'images/**/*.gif',
+        dest: 'dist'
+      })).rejects.toThrow('No source images')
+    })
+  })
+})
