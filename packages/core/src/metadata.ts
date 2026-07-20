@@ -37,10 +37,16 @@ export async function getImageMetadata(source: ImageSource): Promise<ImageMetada
     throw new Error(`Unsupported image format: "${String(normalizedFormat)}"`)
   }
 
+  const metadataHeight = pageHeight ?? height
+
+  if (!width || !metadataHeight) {
+    throw new Error(`Cannot read image dimensions: ${source.path}`)
+  }
+
   const metadata: ImageMetadata = {
     format: normalizedFormat,
-    width: width ?? 0,
-    height: pageHeight ?? height ?? 0,
+    width,
+    height: metadataHeight,
     animated: (pages ?? 1) > 1
   }
 

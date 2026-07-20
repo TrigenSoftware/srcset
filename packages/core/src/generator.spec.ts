@@ -86,6 +86,9 @@ describe('core', () => {
         await expect(generateAll(generator, image, {
           width: [-1]
         })).rejects.toThrow('Invalid width')
+        await expect(generateAll(generator, image, {
+          width: [320.5]
+        })).rejects.toThrow('Invalid width')
       })
 
       describe('optimization', () => {

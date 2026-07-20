@@ -63,7 +63,12 @@ function createVariants(formats: ImageFormat[], widths: number[]) {
 
 function validateWidths(widths: number[]) {
   widths.forEach((width) => {
-    if (typeof width !== 'number' || !Number.isFinite(width) || width <= 0) {
+    if (
+      typeof width !== 'number'
+      || !Number.isFinite(width)
+      || width <= 0
+      || (width > 1 && !Number.isInteger(width))
+    ) {
       throw new Error(`Invalid width: ${String(width)}`)
     }
   })

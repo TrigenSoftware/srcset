@@ -20,7 +20,7 @@ describe('core', () => {
         expect(await matchImage(image, undefined)).toBe(true)
       })
 
-      it('should dismatch unsupported contents', async () => {
+      it('should not match unsupported contents', async () => {
         expect(await matchImage({
           path: '/file.txt',
           contents: Buffer.from('not an image')
@@ -33,7 +33,7 @@ describe('core', () => {
         expect(await matchImage(image, `(width: ${fixtureWidth}px)`)).toBe(true)
       })
 
-      it('should dismatch by media query', async () => {
+      it('should not match by media query', async () => {
         const image = await createImage('jpg')
 
         expect(await matchImage(image, '(max-width: 10px)')).toBe(false)
@@ -45,7 +45,7 @@ describe('core', () => {
         expect(await matchImage(image, '**/*.jpg')).toBe(true)
       })
 
-      it('should dismatch by path glob', async () => {
+      it('should not match by path glob', async () => {
         const image = await createImage('jpg')
 
         expect(await matchImage(image, '**/*.png')).toBe(false)
@@ -57,7 +57,7 @@ describe('core', () => {
         expect(await matchImage(image, () => true)).toBe(true)
       })
 
-      it('should dismatch by function', async () => {
+      it('should not match by function', async () => {
         const image = await createImage('jpg')
 
         expect(await matchImage(image, () => false)).toBe(false)
@@ -76,7 +76,7 @@ describe('core', () => {
         expect(await matchImage(image, ['**/*.jpg', `(width: ${fixtureWidth}px)`])).toBe(true)
       })
 
-      it('should dismatch by few matchers', async () => {
+      it('should not match by few matchers', async () => {
         const image = await createImage('jpg')
 
         expect(await matchImage(image, ['**/*.png', `(width: ${fixtureWidth}px)`])).toBe(false)
