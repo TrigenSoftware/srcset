@@ -57,7 +57,6 @@
   "dependencies": {
     "@srcset/core": "workspace:^",
     "argue-cli": "^3.1.0",
-    "p-limit": "^7.3.0",
     "tinyglobby": "^0.2.10"
   },
   "devDependencies": {

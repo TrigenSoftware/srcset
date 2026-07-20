@@ -10,12 +10,10 @@ import {
   basename,
   resolve
 } from 'node:path'
-import { availableParallelism } from 'node:os'
 import {
   SrcSetGenerator,
   matchImage
 } from '@srcset/core'
-import pLimit from 'p-limit'
 import { glob } from 'tinyglobby'
 import type { SrcSetCliOptions } from './types.ts'
 
@@ -46,8 +44,6 @@ export async function run(options: SrcSetCliOptions) {
   }
 
   const generator = new SrcSetGenerator(generatorOptions)
-  // Bound the number of source files processed at once, not just the variant encoding.
-  const limit = pLimit(generatorOptions.concurrency ?? availableParallelism())
   const written: string[] = []
   const processFile = async (file: string) => {
     const source = {
@@ -80,7 +76,10 @@ export async function run(options: SrcSetCliOptions) {
     }
   }
 
-  await Promise.all(files.map(file => limit(() => processFile(file))))
+  // Sequential on purpose: the variant processing of a single file is parallel already.
+  for (const file of files) {
+    await processFile(file)
+  }
 
   return written
 }
