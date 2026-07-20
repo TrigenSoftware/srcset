@@ -27,6 +27,22 @@ describe('cli', () => {
         })
       })
 
+      it('should look up srcset.config.js in the current directory', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'srcset-cli-'))
+        const cwd = process.cwd()
+
+        await writeFile(join(dir, 'srcset.config.js'), 'export default { dest: "out" }\n')
+        process.chdir(dir)
+
+        try {
+          expect(await loadConfig()).toEqual({
+            dest: 'out'
+          })
+        } finally {
+          process.chdir(cwd)
+        }
+      })
+
       it('should return empty object without config', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'srcset-cli-'))
         const cwd = process.cwd()
