@@ -57,7 +57,10 @@ export function interpolateName(template: string, context: TemplateContext) {
     name
   } = parse(context.resourcePath)
   const relativeDir = relative(context.context, dir)
-  const dirPath = relativeDir ? `${relativeDir.replaceAll(sep, '/')}/` : ''
+  // Resources outside the context get no path prefix: no parent traversals in emitted names.
+  const dirPath = relativeDir && !relativeDir.startsWith('..')
+    ? `${relativeDir.replaceAll(sep, '/')}/`
+    : ''
   let hash: string | null = null
 
   return template
