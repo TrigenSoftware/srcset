@@ -38,17 +38,23 @@ export function parseResourceQuery(resourceQuery: string): QueryOptions {
 
     switch (key) {
       case 'id':
-        query.select = {
-          ...query.select,
-          id: value
+        if (value) {
+          query.select = {
+            ...query.select,
+            id: value
+          }
         }
+
         break
 
       case 'format':
-        query.select = {
-          ...query.select,
-          format: value
+        if (value) {
+          query.select = {
+            ...query.select,
+            format: value
+          }
         }
+
         break
 
       case 'width': {
