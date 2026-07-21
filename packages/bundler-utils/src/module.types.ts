@@ -4,15 +4,16 @@ import type { SrcSetBackendImage } from './types.ts'
 /**
  * Resource id formatter function.
  * @param width - Actual width of the image variant in pixels.
- * @param requestedWidth - Width as it was requested: absolute value or multiplier less than or equal to 1.
+ * @param requestedWidth - Multiplier when the variant was requested with one, otherwise the actual width.
  * @param format - Image variant format.
  * @returns Resource id.
  */
 export type ResourceIdFormatter = (width: number, requestedWidth: number, format: ImageFormat) => string
 
 /**
- * Generated image variant entry of the module: the backend image
- * plus the resource id and the mime type, the runtime `SrcSetEntry` shape.
+ * Generated image variant entry of the module: the backend image plus
+ * the resource id and the mime type. Serialized to the runtime
+ * `SrcSetEntry` shape in the module code.
  */
 export interface SrcSetModuleEntry extends SrcSetBackendImage {
   /**
