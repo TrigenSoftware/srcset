@@ -41,6 +41,11 @@ export async function createPlaceholder(
     width = defaultWidth,
     format = defaultFormat
   } = options === true ? {} : options
+
+  if (width <= 0 || !Number.isInteger(width)) {
+    throw new Error(`Invalid placeholder width: ${String(width)}`)
+  }
+
   const contents = await limit(() => {
     const pipeline = sharp(source.contents).resize({
       width,

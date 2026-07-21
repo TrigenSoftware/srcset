@@ -45,13 +45,20 @@ function findDefaultIndex(select: SrcSetEntrySelect, srcSet: SrcSetModuleEntry[]
       return true
     }
 
-    if (entry.format !== select.format) {
+    // An undefined select field is a wildcard, an empty select falls back to the first variant.
+    if (select.format === undefined && select.width === undefined) {
       return false
     }
 
-    const isMultiplier = typeof select.width === 'number' && select.width <= 1
+    if (select.format !== undefined && entry.format !== select.format) {
+      return false
+    }
 
-    if (isMultiplier) {
+    if (select.width === undefined) {
+      return true
+    }
+
+    if (select.width <= 1) {
       return entry.originMultiplier === select.width
     }
 
