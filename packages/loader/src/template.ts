@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
+  isAbsolute,
   parse,
   relative,
   sep
@@ -57,8 +58,9 @@ export function interpolateName(template: string, context: TemplateContext) {
     name
   } = parse(context.resourcePath)
   const relativeDir = relative(context.context, dir)
-  // Resources outside the context get no path prefix: no parent traversals in emitted names.
-  const dirPath = relativeDir && !relativeDir.startsWith('..')
+  // Resources outside the context get no path prefix: no parent
+  // traversals or windows cross-drive paths in emitted names.
+  const dirPath = relativeDir && !relativeDir.startsWith('..') && !isAbsolute(relativeDir)
     ? `${relativeDir.replaceAll(sep, '/')}/`
     : ''
   let hash: string | null = null
