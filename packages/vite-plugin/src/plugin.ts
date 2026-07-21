@@ -49,6 +49,7 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
   const matchesLoadFilter = createFilter(loadFilter.id.include, loadFilter.id.exclude)
   const devCache: DevCache = new Map()
   let base = '/'
+  let origin = ''
   let isBuild = false
   const generateModule = async (context: EmitContext, id: string) => {
     const { path } = splitId(id)
@@ -77,7 +78,7 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
 
       return {
         outputPath: devPath,
-        publicPath: base + devPath
+        publicPath: origin + base + devPath
       }
     }
 
@@ -95,6 +96,8 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
     enforce: 'pre',
     configResolved(config) {
       base = config.base
+      // Vite includes the origin in the dev asset urls for backend integrations.
+      origin = config.server.origin ?? ''
       isBuild = config.command === 'build'
     },
     configureServer(server) {
