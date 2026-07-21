@@ -54,7 +54,7 @@ export function parseResourceQuery(resourceQuery: string): QueryOptions {
       case 'width': {
         const width = Number(value)
 
-        if (Number.isFinite(width)) {
+        if (width > 0) {
           query.select = {
             ...query.select,
             width
