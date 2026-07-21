@@ -25,7 +25,12 @@ export function parseResourceQuery(resourceQuery: string): QueryOptions {
 
   for (const pair of resourceQuery.slice(1).split('&')) {
     if (pair.startsWith('{')) {
-      query.rules = [JSON.parse(pair) as SrcSetRule]
+      try {
+        query.rules = [JSON.parse(pair) as SrcSetRule]
+      } catch {
+        throw new Error(`Invalid srcset rule in the import query: "${pair}"`)
+      }
+
       continue
     }
 
@@ -46,12 +51,18 @@ export function parseResourceQuery(resourceQuery: string): QueryOptions {
         }
         break
 
-      case 'width':
-        query.select = {
-          ...query.select,
-          width: Number(value)
+      case 'width': {
+        const width = Number(value)
+
+        if (Number.isFinite(width)) {
+          query.select = {
+            ...query.select,
+            width
+          }
         }
+
         break
+      }
 
       case 'placeholder':
         query.placeholder = value !== 'false'
