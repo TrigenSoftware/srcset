@@ -66,7 +66,7 @@ export function getImageProps(src: SrcSetEntry | undefined, srcSet: SrcSetEntry[
   }
 
   if (!src) {
-    if (srcSet) {
+    if (srcSet?.length) {
       return {
         srcSet: toSrcSetString(srcSet)
       }
