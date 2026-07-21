@@ -36,7 +36,7 @@ function toUrlExpression(url: string | SrcSetImagePaths) {
 
   const outputPath = JSON.stringify(url.outputPath)
 
-  return url.publicPathExpression ? `${url.publicPathExpression} + ${outputPath}` : outputPath
+  return url.publicPathExpression ? `(${url.publicPathExpression}) + ${outputPath}` : outputPath
 }
 
 function findDefaultIndex(select: SrcSetEntrySelect, srcSet: SrcSetModuleEntry[]) {

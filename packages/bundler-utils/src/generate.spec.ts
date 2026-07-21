@@ -153,7 +153,7 @@ describe('bundler-utils', () => {
           publicPathExpression: '__webpack_public_path__'
         }))
 
-        expect(module).toContain('const url = __webpack_public_path__ + "/images/image.jpg";')
+        expect(module).toContain('const url = (__webpack_public_path__) + "/images/image.jpg";')
       })
 
       it('should fall back to the output path url without a public path expression', async () => {

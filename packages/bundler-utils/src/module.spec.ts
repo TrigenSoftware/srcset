@@ -40,7 +40,7 @@ describe('bundler-utils', () => {
           [createEntry('jpg', 320), createEntry('webp', 320), createEntry('webp', 640)]
         )
 
-        expect(module).toContain('const url = __webpack_public_path__ + "image@320w.webp";')
+        expect(module).toContain('const url = (__webpack_public_path__) + "image@320w.webp";')
       })
 
       it('should select default variant by multiplier', () => {
@@ -52,7 +52,7 @@ describe('bundler-utils', () => {
           [createEntry('jpg', 640, 1), createEntry('jpg', 320, 0.5)]
         )
 
-        expect(module).toContain('const url = __webpack_public_path__ + "image@320w.jpg";')
+        expect(module).toContain('const url = (__webpack_public_path__) + "image@320w.jpg";')
       })
 
       it('should select default variant by id', () => {
@@ -63,7 +63,7 @@ describe('bundler-utils', () => {
           [createEntry('jpg', 320), createEntry('webp', 640)]
         )
 
-        expect(module).toContain('const url = __webpack_public_path__ + "image@640w.webp";')
+        expect(module).toContain('const url = (__webpack_public_path__) + "image@640w.webp";')
       })
 
       it('should fall back to first variant', () => {
@@ -75,7 +75,7 @@ describe('bundler-utils', () => {
           [createEntry('jpg', 320), createEntry('webp', 640)]
         )
 
-        expect(module).toContain('const url = __webpack_public_path__ + "image@320w.jpg";')
+        expect(module).toContain('const url = (__webpack_public_path__) + "image@320w.jpg";')
       })
 
       it('should create empty module without variants', () => {
@@ -140,7 +140,7 @@ describe('bundler-utils', () => {
           [createEntry('jpg', 320), createEntry('webp', 640)]
         )
 
-        expect(module).toContain('"webp640": __webpack_public_path__ + "image@640w.webp"')
+        expect(module).toContain('"webp640": (__webpack_public_path__) + "image@640w.webp"')
       })
     })
   })
