@@ -52,7 +52,7 @@ import url, { src, srcSet } from './photo.jpg'
 import { getImageProps, getSourceProps } from '@srcset/runtime'
 
 const { src: imgSrc, srcSet: imgSrcSet } = getImageProps(src, srcSet)
-// <img src={imgSrc} srcset={imgSrcSet}/>
+// <img src={imgSrc} srcSet={imgSrcSet}/>
 
 const sources = getSourceProps(srcSet)
 // sources of <picture>, grouped by mime type and ordered by format efficiency

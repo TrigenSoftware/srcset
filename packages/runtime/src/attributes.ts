@@ -55,10 +55,14 @@ export interface ImageSrcProps {
  */
 export function getImageProps(src: SrcSetEntry | undefined, srcSet: SrcSetEntry[] | string | undefined): ImageSrcProps {
   if (typeof srcSet === 'string') {
-    return {
-      src: src?.url,
-      srcSet
-    }
+    return src
+      ? {
+        src: src.url,
+        srcSet
+      }
+      : {
+        srcSet
+      }
   }
 
   if (!src) {
