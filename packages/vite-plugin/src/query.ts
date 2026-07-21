@@ -56,11 +56,11 @@ export function splitId(id: string) {
 }
 
 /**
- * Decode the module id query for parsing: browser urls in dev mode
- * arrive percent-encoded.
+ * Get the module id query for parsing. The id arrives already decoded:
+ * Vite decodes request urls before the plugins.
  * @param id - Module id.
  * @returns Query string starting with `?`.
  */
 export function getResourceQuery(id: string) {
-  return `?${decodeURIComponent(splitId(id).query)}`
+  return `?${splitId(id).query}`
 }

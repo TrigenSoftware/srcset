@@ -81,8 +81,8 @@ describe('vite-plugin', () => {
     })
 
     describe('getResourceQuery', () => {
-      it('should decode percent-encoded query', () => {
-        expect(getResourceQuery(`/images/photo.jpg?${encodeURIComponent('{ "width": [320] }')}`)).toBe(
+      it('should keep the query as is', () => {
+        expect(getResourceQuery('/images/photo.jpg?{ "width": [320] }')).toBe(
           '?{ "width": [320] }'
         )
       })
