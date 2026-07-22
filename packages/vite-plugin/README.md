@@ -59,8 +59,14 @@ export default defineConfig({
     srcset({
       rules: [
         {
+          match: '**/*.jpg',
           width: [1, 0.5],
           format: ['avif', 'webp', 'jpg']
+        },
+        {
+          match: '**/*.gif',
+          width: [1, 0.5],
+          format: ['webp', 'gif']
         }
       ],
       placeholder: true
