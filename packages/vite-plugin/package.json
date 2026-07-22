@@ -1,0 +1,88 @@
+{
+  "name": "@srcset/vite-plugin",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Vite plugin for generating responsive images.",
+  "author": {
+    "name": "Dan Onoshko",
+    "email": "danon0404@gmail.com",
+    "url": "https://github.com/dangreen"
+  },
+  "license": "MIT",
+  "homepage": "https://srcset.js.org/integrations/vite-plugin/",
+  "funding": "https://ko-fi.com/dangreen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TrigenSoftware/srcset.git",
+    "directory": "packages/vite-plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/TrigenSoftware/srcset/issues"
+  },
+  "keywords": [
+    "srcset",
+    "image",
+    "picture",
+    "responsive",
+    "vite",
+    "vite-plugin"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./client": {
+      "types": "./client.d.ts"
+    }
+  },
+  "publishConfig": {
+    "exports": {
+      "./package.json": "./package.json",
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./client": {
+        "types": "./client.d.ts"
+      }
+    },
+    "directory": "package",
+    "linkDirectory": false
+  },
+  "files": [
+    "dist",
+    "client.d.ts"
+  ],
+  "scripts": {
+    "clear:package": "del ./package",
+    "clear:dist": "del ./dist",
+    "clear": "del ./package ./dist ./coverage",
+    "prepublishOnly": "run build clear:package clean-publish",
+    "postpublish": "pnpm clear:package",
+    "build": "tsc -p ./tsconfig.build.json",
+    "lint": "oxlint",
+    "format": "oxlint --fix",
+    "test:unit": "vitest run --coverage",
+    "test:unit:watch": "vitest watch",
+    "test:types": "tsc --noEmit",
+    "test": "run -p lint test:unit test:types"
+  },
+  "peerDependencies": {
+    "@srcset/runtime": "workspace:^",
+    "vite": ">=5"
+  },
+  "dependencies": {
+    "@srcset/bundler-utils": "workspace:^",
+    "@srcset/core": "workspace:^",
+    "p-limit": "^7.3.0"
+  },
+  "devDependencies": {
+    "@srcset/runtime": "workspace:^",
+    "@types/node": "^22.0.0",
+    "sharp": "^0.35.3",
+    "vite": "^8.1.0"
+  }
+}
