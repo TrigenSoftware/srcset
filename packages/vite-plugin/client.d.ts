@@ -1,4 +1,5 @@
 /* oxlint-disable trigen/import-order */
+/// <reference types="vite/client" />
 /**
  * Ambient module declarations for image imports handled by @srcset/vite-plugin.
  * Only the named exports are declared: the default url export
