@@ -1,6 +1,8 @@
 import { availableParallelism } from 'node:os'
-import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import {
+  access,
+  readFile
+} from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SrcSetImage } from '@srcset/core'
 import pLimit from 'p-limit'
@@ -16,8 +18,7 @@ import type { SrcSetVitePluginOptions } from './types.ts'
 import {
   splitId,
   getResourceQuery,
-  createLoadFilter,
-  isImageId
+  createLoadFilter
 } from './query.ts'
 import {
   type DevCache,
@@ -31,6 +32,16 @@ interface EmitContext {
     name: string
     source: Buffer
   }): string
+}
+
+async function fileExists(path: string) {
+  try {
+    await access(path)
+
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -110,15 +121,15 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
     },
     load: {
       filter: loadFilter,
-      handler(id) {
-        if (!matchesLoadFilter(id) || !isImageId(id)) {
+      async handler(id) {
+        if (!matchesLoadFilter(id)) {
           return null
         }
 
         // Root-absolute imports of `publicDir` assets stay in the Vite asset pipeline.
         const { path } = splitId(id)
 
-        if (publicDir && !existsSync(path) && existsSync(join(publicDir, path))) {
+        if (publicDir && !await fileExists(path) && await fileExists(join(publicDir, path))) {
           return null
         }
 

@@ -7,8 +7,7 @@ import { createFilter } from 'vite'
 import {
   createLoadFilter,
   splitId,
-  getResourceQuery,
-  isImageId
+  getResourceQuery
 } from './query.ts'
 
 function createMatcher(include?: Parameters<typeof createLoadFilter>[0], exclude?: Parameters<typeof createLoadFilter>[1]) {
@@ -78,15 +77,6 @@ describe('vite-plugin', () => {
           path: '/images/photo.jpg',
           query: ''
         })
-      })
-    })
-
-    describe('isImageId', () => {
-      it('should match image ids only', () => {
-        expect(isImageId('/images/photo.jpg')).toBe(true)
-        expect(isImageId('/images/photo.png?{ "width": [1] }')).toBe(true)
-        expect(isImageId('/hero/main.ts')).toBe(false)
-        expect(isImageId('/hero/styles.css')).toBe(false)
       })
     })
 

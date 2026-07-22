@@ -2,8 +2,7 @@
 /**
  * Ambient module declarations for image imports handled by @srcset/vite-plugin.
  * Only the named exports are declared: the default url export
- * comes from the `vite/client` asset types. The `*}` pattern covers
- * imports with a JSON rule query, where `vite/client` does not apply.
+ * comes from the `vite/client` asset types.
  *
  * Usage: add to tsconfig `types` or reference directly:
  * /// <reference types="@srcset/vite-plugin/client" />
@@ -61,16 +60,4 @@ declare module '*.gif' {
   export const srcSet: SrcSetEntry[]
   export const srcMap: Record<string, string>
   export const placeholder: string | undefined
-}
-
-declare module '*}' {
-  import type { SrcSetEntry } from '@srcset/runtime'
-
-  const url: string
-
-  export const src: SrcSetEntry
-  export const srcSet: SrcSetEntry[]
-  export const srcMap: Record<string, string>
-  export const placeholder: string | undefined
-  export default url
 }
