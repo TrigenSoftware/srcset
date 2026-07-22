@@ -32,7 +32,9 @@ export function addDevImage(cache: DevCache, image: SrcSetImage) {
   const hash = createHash('sha256').update(image.contents).digest('hex').slice(0, hashLength)
   const extensionIndex = image.path.lastIndexOf('.')
   const stem = image.path.slice(image.path.lastIndexOf('/') + 1, extensionIndex)
-  const pathname = `${devPathPrefix}${stem}.${hash}.${image.format}`
+  // Encoded pathname is both the cache key and the public url: browsers
+  // percent-encode special characters in requests, the keys must match.
+  const pathname = `${devPathPrefix}${encodeURIComponent(`${stem}.${hash}.${image.format}`)}`
 
   cache.set(pathname, {
     contents: image.contents,

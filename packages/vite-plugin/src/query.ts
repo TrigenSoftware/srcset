@@ -13,6 +13,17 @@ function toArray<T>(value: T | readonly T[]): T[] {
 }
 
 /**
+ * Check the module id is a supported image import.
+ * Guards the `load` handler with a custom `include`: user patterns
+ * narrow the scope, but only images can be processed.
+ * @param id - Module id.
+ * @returns Whether the id is an image import.
+ */
+export function isImageId(id: string) {
+  return imageIdPattern.test(id)
+}
+
+/**
  * Create the `load` hook filter from the plugin options: Vite evaluates it
  * natively (in rolldown) and skips calling the JS handler for non-matching
  * module ids entirely. The handler applies the same filter with `createFilter`

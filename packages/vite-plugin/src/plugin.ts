@@ -1,5 +1,7 @@
 import { availableParallelism } from 'node:os'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { SrcSetImage } from '@srcset/core'
 import pLimit from 'p-limit'
 import {
@@ -14,7 +16,8 @@ import type { SrcSetVitePluginOptions } from './types.ts'
 import {
   splitId,
   getResourceQuery,
-  createLoadFilter
+  createLoadFilter,
+  isImageId
 } from './query.ts'
 import {
   type DevCache,
@@ -50,6 +53,7 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
   const devCache: DevCache = new Map()
   let base = '/'
   let origin = ''
+  let publicDir = ''
   let isBuild = false
   const generateModule = async (context: EmitContext, id: string) => {
     const { path } = splitId(id)
@@ -98,6 +102,7 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
       base = config.base
       // Vite includes the origin in the dev asset urls for backend integrations.
       origin = config.server.origin ?? ''
+      publicDir = config.publicDir
       isBuild = config.command === 'build'
     },
     configureServer(server) {
@@ -106,7 +111,14 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
     load: {
       filter: loadFilter,
       handler(id) {
-        if (!matchesLoadFilter(id)) {
+        if (!matchesLoadFilter(id) || !isImageId(id)) {
+          return null
+        }
+
+        // Root-absolute imports of `publicDir` assets stay in the Vite asset pipeline.
+        const { path } = splitId(id)
+
+        if (publicDir && !existsSync(path) && existsSync(join(publicDir, path))) {
           return null
         }
 

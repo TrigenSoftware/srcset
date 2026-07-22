@@ -3,6 +3,10 @@ import {
   it,
   expect
 } from 'vitest'
+import {
+  mkdir,
+  copyFile
+} from 'node:fs/promises'
 import path from 'node:path'
 import sharp from 'sharp'
 import {
@@ -157,6 +161,20 @@ describe('vite-plugin', () => {
         expect(assets.length).toBe(1)
         // The `__VITE_ASSET__` placeholder is replaced inside the built url string.
         expect(exports.default).toBe(`https://proxy.test/plain/assets/${original.fileName}`)
+      })
+
+      it('should leave public directory imports to Vite', async () => {
+        const dir = await createFixtureProject(`import logo from '/logo.png'
+export default logo
+`)
+
+        await mkdir(path.join(dir, 'public'))
+        await copyFile(path.join(dir, 'image.jpg'), path.join(dir, 'public', 'logo.png'))
+
+        const { exports } = await buildFixture(dir)
+
+        // Vite serves public assets from the base url root.
+        expect(exports.default).toBe('/assets/logo.png')
       })
 
       it('should export placeholder data-url when enabled', async () => {
