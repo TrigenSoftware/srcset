@@ -60,7 +60,8 @@ export interface SrcSetRule extends GenerateOptions {
    */
   match?: Matcher | Matcher[]
   /**
-   * Do not apply the rest of the rules if this rule matched.
+   * Keep matching the rest of the rules after this rule matched.
+   * By default the first matched rule is the only one applied.
    */
-  only?: boolean
+  fallthrough?: boolean
 }

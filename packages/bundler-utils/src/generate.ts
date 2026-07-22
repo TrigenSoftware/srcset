@@ -96,7 +96,7 @@ export async function generateSrcSetModule(
       })
     }
 
-    if (rule.only) {
+    if (!rule.fallthrough) {
       break
     }
   }

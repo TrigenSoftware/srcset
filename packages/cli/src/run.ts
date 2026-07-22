@@ -74,7 +74,7 @@ export async function run(options: SrcSetCliOptions) {
         }
       }
 
-      if (rule.only) {
+      if (!rule.fallthrough) {
         break
       }
     }

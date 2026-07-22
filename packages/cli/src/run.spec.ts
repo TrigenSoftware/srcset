@@ -86,7 +86,7 @@ describe('cli', () => {
       expect(written).toEqual([])
     })
 
-    it('should stop after only rule', async () => {
+    it('should stop after the first matched rule', async () => {
       const dir = await createProject()
       const written = await runIn(dir, {
         src: 'images/**/*.jpg',
@@ -94,7 +94,6 @@ describe('cli', () => {
         skipOptimization: true,
         rules: [
           {
-            only: true,
             width: [0.5]
           },
           {
@@ -105,6 +104,28 @@ describe('cli', () => {
 
       expect(written.length).toBe(1)
       expect(written[0]).toContain('photo@320w.jpg')
+    })
+
+    it('should keep matching after a fallthrough rule', async () => {
+      const dir = await createProject()
+      const written = await runIn(dir, {
+        src: 'images/**/*.jpg',
+        dest: 'dist',
+        skipOptimization: true,
+        rules: [
+          {
+            fallthrough: true,
+            width: [0.5]
+          },
+          {
+            width: [0.25]
+          }
+        ]
+      })
+
+      expect(written.length).toBe(2)
+      expect(written.some(file => file.includes('photo@320w.jpg'))).toBe(true)
+      expect(written.some(file => file.includes('photo@160w.jpg'))).toBe(true)
     })
 
     it('should throw without matched sources', async () => {

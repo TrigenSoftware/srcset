@@ -89,12 +89,11 @@ describe('bundler-utils', () => {
         expect(module).toContain('export const srcSet = [];')
       })
 
-      it('should stop after only rule', async () => {
+      it('should stop after the first matched rule', async () => {
         const image = await createImage()
         const module = await generateSrcSetModule(image, {}, {
           rules: [
             {
-              only: true,
               width: [0.5]
             },
             {
@@ -105,6 +104,24 @@ describe('bundler-utils', () => {
 
         expect(module).toContain('"jpg320"')
         expect(module).not.toContain('"jpg160"')
+      })
+
+      it('should keep matching after a fallthrough rule', async () => {
+        const image = await createImage()
+        const module = await generateSrcSetModule(image, {}, {
+          rules: [
+            {
+              fallthrough: true,
+              width: [0.5]
+            },
+            {
+              width: [0.25]
+            }
+          ]
+        }, emitToPath)
+
+        expect(module).toContain('"jpg320"')
+        expect(module).toContain('"jpg160"')
       })
 
       it('should inline placeholder data-url', async () => {

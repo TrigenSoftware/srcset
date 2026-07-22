@@ -155,7 +155,7 @@ describe('loader', () => {
         expect(metadata.width).toBe(16)
       })
 
-      it('should export placeholder together with only rule', async () => {
+      it('should export placeholder together with a matched rule', async () => {
         const dir = await createFixtureProject(defaultEntry)
         const { exports } = await compile(createCompiler, dir, {
           skipOptimization: true,
@@ -163,7 +163,6 @@ describe('loader', () => {
           rules: [
             {
               match: '**/*.jpg',
-              only: true,
               width: [0.5]
             }
           ]
