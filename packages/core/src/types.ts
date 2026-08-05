@@ -7,6 +7,7 @@ import type {
 } from 'sharp'
 import type { LimitFunction } from 'p-limit'
 import type { ImageFormat } from './formats.ts'
+import type { SrcSetCacheStorage } from './cache.ts'
 
 /**
  * Source image file.
@@ -113,7 +114,9 @@ export type ImageOptimizer = (contents: Buffer, format: ImageFormat) => Buffer |
 export type OptimizationOptions = Partial<Record<ImageFormat, ImageOptimizer>>
 
 /**
- * Postfix formatter function.
+ * Postfix formatter function. Must be pure: it is invoked repeatedly
+ * for the same variant - including for variants that end up skipped -
+ * and its output participates in the cache addressing.
  * @param width - Actual width of the image variant in pixels.
  * @param requestedWidth - Width as it was requested: absolute value or multiplier less than or equal to 1.
  * @param format - Image variant format.
@@ -155,9 +158,14 @@ export interface SrcSetGeneratorOptions {
    * p-limit's limit function, e.g. to share one limit between several generators.
    */
   limit?: LimitFunction
+  /**
+   * Disk cache storage: repeated generation reads the stored variants
+   * instead of processing.
+   */
+  cache?: SrcSetCacheStorage
 }
 
-export interface GenerateOptions extends Omit<SrcSetGeneratorOptions, 'concurrency' | 'limit'> {
+export interface GenerateOptions extends Omit<SrcSetGeneratorOptions, 'concurrency' | 'limit' | 'cache'> {
   /**
    * Output image format(s) to convert. Defaults to the source image format.
    */
@@ -166,4 +174,52 @@ export interface GenerateOptions extends Omit<SrcSetGeneratorOptions, 'concurren
    * Output image width(s) to resize. Value less than or equal to 1 is treated as a multiplier.
    */
   width?: number | number[]
+}
+
+/**
+ * Format and width of an image variant to generate.
+ */
+export interface ImageVariant {
+  /**
+   * Image variant format.
+   */
+  format: ImageFormat
+  /**
+   * Image variant width: absolute value or multiplier less than or equal to 1.
+   */
+  width: number
+}
+
+/**
+ * Resolved generation inputs of a single generator call.
+ */
+export interface GenerateContext {
+  /**
+   * Source image file.
+   */
+  source: ImageSource
+  /**
+   * Source image metadata.
+   */
+  metadata: ImageMetadata
+  /**
+   * Sharp output options for each supported format.
+   */
+  processing: ProcessingOptions
+  /**
+   * Custom optimizer functions for each supported format.
+   */
+  optimization: OptimizationOptions
+  /**
+   * Postfix string or formatter function.
+   */
+  postfix: Postfix
+  /**
+   * Do not re-encode the original image variant and skip custom optimizers.
+   */
+  skipOptimization: boolean
+  /**
+   * Emit variants with requested width higher than the original width.
+   */
+  scalingUp: boolean
 }

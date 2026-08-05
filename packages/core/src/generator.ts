@@ -4,15 +4,17 @@ import type { Sharp } from 'sharp'
 import pLimit from 'p-limit'
 import sharp from 'sharp'
 import type { ImageFormat } from './formats.ts'
+import type { SrcSetCacheStorage } from './cache.ts'
 import type {
   ImageSource,
-  ImageMetadata,
+  ImageVariant,
   SrcSetImage,
   ProcessingOptions,
   OptimizationOptions,
   Postfix,
   SrcSetGeneratorOptions,
-  GenerateOptions
+  GenerateOptions,
+  GenerateContext
 } from './types.ts'
 import {
   isSupportedFormat,
@@ -24,30 +26,15 @@ import {
   mergeProcessingOptions
 } from './defaults.ts'
 import { getImageMetadata } from './metadata.ts'
-import { renameImagePath } from './path.ts'
+import { resolveVariant } from './path.ts'
 import { parallel } from './parallel.ts'
-
-interface Variant {
-  format: ImageFormat
-  width: number
-}
-
-interface GenerateContext {
-  source: ImageSource
-  metadata: ImageMetadata
-  processing: ProcessingOptions
-  optimization: OptimizationOptions
-  postfix: Postfix
-  skipOptimization: boolean
-  scalingUp: boolean
-}
 
 const animatableFormats = new Set<ImageFormat>(['gif', 'webp'])
 
 function createVariants(formats: ImageFormat[], widths: number[]) {
   const uniqueFormats = new Set(formats)
   const uniqueWidths = new Set(widths)
-  const variants: Variant[] = []
+  const variants: ImageVariant[] = []
 
   for (const format of uniqueFormats) {
     for (const width of uniqueWidths) {
@@ -72,14 +59,6 @@ function validateWidths(widths: number[]) {
       throw new Error(`Invalid width: ${String(width)}`)
     }
   })
-}
-
-function formatPostfix(postfix: Postfix, width: number, requestedWidth: number, format: ImageFormat) {
-  if (typeof postfix === 'string') {
-    return postfix
-  }
-
-  return postfix(width, requestedWidth, format)
 }
 
 function applyFormat(pipeline: Sharp, format: Exclude<ImageFormat, 'svg'>, processing: ProcessingOptions) {
@@ -116,6 +95,7 @@ export class SrcSetGenerator {
   private readonly scalingUp: boolean
   private readonly postfix: Postfix
   private readonly limit: LimitFunction
+  private readonly cache?: SrcSetCacheStorage
 
   constructor(options: SrcSetGeneratorOptions = {}) {
     this.processing = mergeProcessingOptions(defaultProcessing, options.processing)
@@ -126,6 +106,7 @@ export class SrcSetGenerator {
     this.scalingUp = options.scalingUp ?? true
     this.postfix = options.postfix ?? defaultPostfix
     this.limit = options.limit ?? pLimit(options.concurrency ?? availableParallelism())
+    this.cache = options.cache
   }
 
   /**
@@ -134,7 +115,10 @@ export class SrcSetGenerator {
    * @param options - Image handle options.
    * @yields Generated image variants.
    */
-  async* generate(source: ImageSource, options: GenerateOptions = {}): AsyncGenerator<SrcSetImage, void> {
+  async* generate(
+    source: ImageSource,
+    options: GenerateOptions = {}
+  ): AsyncGenerator<SrcSetImage, void> {
     if (typeof source.path !== 'string' || !Buffer.isBuffer(source.contents)) {
       throw new TypeError('Invalid source: path string and contents buffer are required.')
     }
@@ -185,7 +169,7 @@ export class SrcSetGenerator {
 
     if (metadata.format === 'svg') {
       if (formats.includes('svg')) {
-        yield await this.processSvg(context)
+        yield await this.memo(context, null, () => this.processSvg(context))
       }
 
       return
@@ -195,9 +179,24 @@ export class SrcSetGenerator {
 
     yield* parallel(
       variants,
-      variant => this.processVariant(variant, context),
+      variant => this.memo(context, variant, () => this.processVariant(context, variant)),
       this.limit
     )
+  }
+
+  /**
+   * Memoize the variant generation in the cache storage, when configured.
+   * @param context - Generate context.
+   * @param variant - Variant to generate, `null` for the SVG passthrough.
+   * @param fn - Variant generator function.
+   * @returns Generated image variant, or `null` if the variant is skipped.
+   */
+  private async memo<T extends SrcSetImage | null>(
+    context: GenerateContext,
+    variant: ImageVariant | null,
+    fn: () => Promise<T>
+  ): Promise<T | SrcSetImage> {
+    return this.cache ? this.cache.memo(context, variant, fn) : fn()
   }
 
   /**
@@ -225,11 +224,14 @@ export class SrcSetGenerator {
 
   /**
    * Resize, convert and optimize the image variant.
-   * @param variant - Format and width of the variant.
    * @param context - Generate context.
+   * @param variant - Format and width of the variant.
    * @returns Image variant, or `null` if the variant should be skipped.
    */
-  private async processVariant(variant: Variant, context: GenerateContext): Promise<SrcSetImage | null> {
+  private async processVariant(
+    context: GenerateContext,
+    variant: ImageVariant
+  ): Promise<SrcSetImage | null> {
     const {
       format,
       width
@@ -245,18 +247,18 @@ export class SrcSetGenerator {
       metadata
     } = context
     const isMultiplier = width <= 1
-    const requestedWidth = isMultiplier ? Math.ceil(width * metadata.width) : width
+    const {
+      requestedWidth,
+      targetWidth,
+      postfix,
+      path
+    } = resolveVariant(context, variant)
 
     if (!context.scalingUp && requestedWidth > metadata.width) {
       return null
     }
 
-    // Pixels are never upscaled, so the variant width is capped by the original width
-    // and the postfix is built from the actual output width.
-    const targetWidth = Math.min(requestedWidth, metadata.width)
     const willResize = targetWidth < metadata.width
-    const postfix = formatPostfix(context.postfix, targetWidth, width, format)
-    const path = renameImagePath(source.path, postfix, format)
     const passthrough = !willResize && format === metadata.format && context.skipOptimization
     let contents: Buffer
     let outputWidth = metadata.width
@@ -308,7 +310,11 @@ export class SrcSetGenerator {
    * @param context - Generate context.
    * @returns Optimized image contents.
    */
-  private async optimizeImage(contents: Buffer, format: ImageFormat, context: GenerateContext) {
+  private async optimizeImage(
+    contents: Buffer,
+    format: ImageFormat,
+    context: GenerateContext
+  ) {
     const optimize = context.optimization[format]
 
     if (context.skipOptimization || !optimize) {
