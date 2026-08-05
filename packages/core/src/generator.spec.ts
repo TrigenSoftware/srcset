@@ -3,7 +3,14 @@ import {
   it,
   expect
 } from 'vitest'
+import {
+  mkdtemp,
+  readdir
+} from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import sharp from 'sharp'
+import { SrcSetCacheStorage } from './cache.ts'
 import { SrcSetGenerator } from './generator.ts'
 import type {
   ImageSource,
@@ -458,6 +465,33 @@ describe('core', () => {
           })
 
           expect(images.length).toBe(3)
+        })
+      })
+
+      describe('cache', () => {
+        it('should reuse stored variants between generators', async () => {
+          const dir = await mkdtemp(path.join(tmpdir(), 'srcset-generator-cache-'))
+          const cache = new SrcSetCacheStorage(dir)
+          const image = await createImage('jpg')
+          const options: GenerateOptions = {
+            width: [1, 0.5],
+            format: ['webp', 'jpg']
+          }
+          const generated = await generateAll(new SrcSetGenerator({
+            skipOptimization: true,
+            cache
+          }), image, options)
+          const cached = await generateAll(new SrcSetGenerator({
+            skipOptimization: true,
+            cache
+          }), image, options)
+
+          expect(generated.length).toBe(4)
+          expect(cached).toEqual(generated)
+
+          const files = (await readdir(dir)).filter(name => !name.endsWith('.json'))
+
+          expect(files.length).toBe(4)
         })
       })
     })
