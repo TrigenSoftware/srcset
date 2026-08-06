@@ -3,27 +3,32 @@ import {
   access,
   readFile
 } from 'node:fs/promises'
-import { join } from 'node:path'
-import type { SrcSetImage } from '@srcset/core'
+import {
+  basename,
+  join
+} from 'node:path'
+import {
+  type SrcSetImage,
+  SrcSetCacheStorage
+} from '@srcset/core'
 import pLimit from 'p-limit'
 import {
   type Plugin,
   createFilter
 } from 'vite'
 import {
+  type SrcSetModuleOptions,
   parseResourceQuery,
   generateSrcSetModule
 } from '@srcset/bundler-utils'
 import type { SrcSetVitePluginOptions } from './types.ts'
 import {
   splitId,
-  getResourceQuery,
   createLoadFilter
 } from './query.ts'
 import {
-  type DevCache,
-  addDevImage,
-  createDevMiddleware
+  createDevMiddleware,
+  getDevPath
 } from './dev.ts'
 
 interface EmitContext {
@@ -54,6 +59,7 @@ async function fileExists(path: string) {
 export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
   const {
     concurrency = availableParallelism(),
+    cache = true,
     include,
     exclude
   } = options
@@ -61,21 +67,19 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
   const loadFilter = createLoadFilter(include, exclude)
   // Fallback for environments without hook filters, built from the same filter.
   const matchesLoadFilter = createFilter(loadFilter.id.include, loadFilter.id.exclude)
-  const devCache: DevCache = new Map()
-  let base = '/'
-  let origin = ''
+  let moduleOptions: SrcSetModuleOptions
+  let devUrlBase = '/'
   let publicDir = ''
   let isBuild = false
-  const generateModule = async (context: EmitContext, id: string) => {
-    const { path } = splitId(id)
+  const generateModule = async (context: EmitContext, path: string, rawQuery: string) => {
     const source = {
       path,
       contents: await readFile(path)
     }
-    const query = parseResourceQuery(getResourceQuery(id))
+    const query = parseResourceQuery(rawQuery)
     const emitImage = (image: SrcSetImage) => {
       if (isBuild) {
-        const name = image.path.slice(image.path.lastIndexOf('/') + 1)
+        const name = basename(image.path)
         const referenceId = context.emitFile({
           type: 'asset',
           name,
@@ -89,18 +93,20 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
         }
       }
 
-      const devPath = addDevImage(devCache, image).slice(1)
+      // The variant file is already stored: the storage
+      // memoizes the generation before the emit.
+      const devPath = getDevPath(image)
 
       return {
         outputPath: devPath,
-        publicPath: origin + base + devPath
+        publicPath: devUrlBase + devPath
       }
     }
 
     return generateSrcSetModule(
       source,
       query,
-      options,
+      moduleOptions,
       emitImage,
       limit
     )
@@ -110,14 +116,25 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
     name: 'srcset',
     enforce: 'pre',
     configResolved(config) {
-      base = config.base
       // Vite includes the origin in the dev asset urls for backend integrations.
-      origin = config.server.origin ?? ''
+      devUrlBase = (config.server.origin ?? '') + config.base
       publicDir = config.publicDir
       isBuild = config.command === 'build'
+      // The dev server always uses the storage: variants are served from it.
+      moduleOptions = {
+        ...options,
+        cache: !isBuild || cache
+          ? new SrcSetCacheStorage(join(config.cacheDir, 'srcset'))
+          : undefined
+      }
     },
     configureServer(server) {
-      server.middlewares.use(createDevMiddleware(devCache))
+      if (moduleOptions.cache) {
+        server.middlewares.use(createDevMiddleware(
+          moduleOptions.cache,
+          server.config.base
+        ))
+      }
     },
     load: {
       filter: loadFilter,
@@ -126,14 +143,17 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
           return null
         }
 
-        // Root-absolute imports of `publicDir` assets stay in the Vite asset pipeline.
-        const { path } = splitId(id)
+        const {
+          path,
+          query
+        } = splitId(id)
 
+        // Root-absolute imports of `publicDir` assets stay in the Vite asset pipeline.
         if (publicDir && !await fileExists(path) && await fileExists(join(publicDir, path))) {
           return null
         }
 
-        return generateModule(this, id)
+        return generateModule(this, path, query)
       }
     }
   }

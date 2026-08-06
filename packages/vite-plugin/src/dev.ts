@@ -2,66 +2,89 @@ import type {
   IncomingMessage,
   ServerResponse
 } from 'node:http'
-import { createHash } from 'node:crypto'
+import type { ReadStream } from 'node:fs'
 import {
+  basename,
+  extname
+} from 'node:path'
+import {
+  type SrcSetCacheStorage,
   type SrcSetImage,
   mimeTypes
 } from '@srcset/core'
 
 export const devPathPrefix = '/@srcset/'
 
-const hashLength = 8
-
-interface DevImage {
-  contents: Buffer
-  type: string
-}
+// Relative form: emitted paths stay relative, public urls are prefixed with the base.
+const relativeDevPathPrefix = devPathPrefix.slice(1)
 
 /**
- * In-memory cache of the generated variants for the dev server middleware.
- */
-export type DevCache = Map<string, DevImage>
-
-/**
- * Add an image variant to the dev cache.
- * @param cache - Dev cache.
+ * Make the dev server path of the variant, without the leading slash.
+ * The name is encoded: browsers percent-encode special characters
+ * in requests, the middleware matches the decoded form.
  * @param image - Image variant.
- * @returns Dev server pathname of the variant.
+ * @returns Dev server path of the variant.
  */
-export function addDevImage(cache: DevCache, image: SrcSetImage) {
-  const hash = createHash('sha256').update(image.contents).digest('hex').slice(0, hashLength)
-  const extensionIndex = image.path.lastIndexOf('.')
-  const stem = image.path.slice(image.path.lastIndexOf('/') + 1, extensionIndex)
-  // Encoded pathname is both the cache key and the public url: browsers
-  // percent-encode special characters in requests, the keys must match.
-  const pathname = `${devPathPrefix}${encodeURIComponent(`${stem}.${hash}.${image.format}`)}`
-
-  cache.set(pathname, {
-    contents: image.contents,
-    type: mimeTypes[image.format]
-  })
-
-  return pathname
+export function getDevPath(image: SrcSetImage) {
+  return `${relativeDevPathPrefix}${encodeURIComponent(basename(image.path))}`
 }
 
 /**
- * Create a dev server middleware serving the generated variants from the cache.
- * @param cache - Dev cache.
+ * Create a dev server middleware streaming the generated variants
+ * from the cache storage.
+ * @param storage - Cache storage of the generated variants.
+ * @param base - Base public path of the served urls.
  * @returns Connect-style middleware.
  */
-export function createDevMiddleware(cache: DevCache) {
-  return (request: IncomingMessage, response: ServerResponse, next: () => void) => {
-    const url = request.url ?? ''
-    const index = url.indexOf(devPathPrefix)
-    const image = index < 0 ? undefined : cache.get(url.slice(index))
+export function createDevMiddleware(storage: SrcSetCacheStorage, base = '/') {
+  const prefix = base + relativeDevPathPrefix
 
-    if (!image) {
+  return (request: IncomingMessage, response: ServerResponse, next: () => void) => {
+    let fileName: string
+
+    // The prefix is matched on the pathname only: a prefix inside
+    // a query string of a foreign route is not ours. Url parsing also
+    // normalizes dot segments, so traversals fail the prefix check.
+    try {
+      const { pathname } = new URL(request.url ?? '', 'http://localhost')
+
+      if (!pathname.startsWith(prefix)) {
+        next()
+        return
+      }
+
+      fileName = decodeURIComponent(pathname.slice(prefix.length))
+    } catch {
+      // Invalid url or malformed percent-encoding: not ours.
       next()
       return
     }
 
-    response.setHeader('Content-Type', image.type)
+    const format = extname(fileName).slice(1) as keyof typeof mimeTypes
+
+    // The middleware serves plain variant files only.
+    if (!Object.hasOwn(mimeTypes, format)) {
+      next()
+      return
+    }
+
+    let stream: ReadStream
+
+    try {
+      stream = storage.readStream(fileName)
+    } catch {
+      // The storage rejects unsafe paths: not ours to serve.
+      next()
+      return
+    }
+
+    stream.on('error', () => {
+      // The storage was cleaned under a running server.
+      response.statusCode = 404
+      response.end()
+    })
+    response.setHeader('Content-Type', mimeTypes[format])
     response.setHeader('Cache-Control', 'no-cache')
-    response.end(image.contents)
+    stream.pipe(response)
   }
 }

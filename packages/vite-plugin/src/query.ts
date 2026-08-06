@@ -54,13 +54,3 @@ export function splitId(id: string) {
     query: id.slice(index + 1)
   }
 }
-
-/**
- * Get the module id query for parsing. The id arrives already decoded:
- * Vite decodes request urls before the plugins.
- * @param id - Module id.
- * @returns Query string starting with `?`.
- */
-export function getResourceQuery(id: string) {
-  return `?${splitId(id).query}`
-}

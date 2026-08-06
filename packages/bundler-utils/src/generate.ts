@@ -74,7 +74,13 @@ export async function generateSrcSetModule(
   const rules = query.rules ?? options.rules ?? [{}]
   const backend = backendFactory(options, emitImage, limit)
   const metadata = await getImageMetadata(source)
-  const placeholder = await createPlaceholder(source, query.placeholder ?? options.placeholder, limit)
+  const placeholder = await createPlaceholder(
+    source,
+    metadata,
+    query.placeholder ?? options.placeholder,
+    limit,
+    options.cache
+  )
   const select = {
     format: metadata.format,
     width: metadata.width,

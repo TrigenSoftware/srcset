@@ -13,17 +13,18 @@ export interface QueryOptions {
  * - `{ "width": [1, 0.5], "format": ["webp", "jpg"] }` - JSON rule to generate variants;
  * - `id=<id>`, `format=<format>`, `width=<width>` - selection of the variant for the default export;
  * - `placeholder` - add the `placeholder` module export.
- * @param resourceQuery - Resource query string starting with `?`.
+ * @param resourceQuery - Resource query string, with or without the leading `?`.
  * @returns Parsed options.
  */
 export function parseResourceQuery(resourceQuery: string): QueryOptions {
   const query: QueryOptions = {}
+  const pairs = resourceQuery.startsWith('?') ? resourceQuery.slice(1) : resourceQuery
 
-  if (!resourceQuery.startsWith('?')) {
+  if (!pairs) {
     return query
   }
 
-  for (const pair of resourceQuery.slice(1).split('&')) {
+  for (const pair of pairs.split('&')) {
     if (pair.startsWith('{')) {
       try {
         query.rules = [JSON.parse(pair) as SrcSetRule]

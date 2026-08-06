@@ -6,8 +6,7 @@ import {
 import { createFilter } from 'vite'
 import {
   createLoadFilter,
-  splitId,
-  getResourceQuery
+  splitId
 } from './query.ts'
 
 function createMatcher(include?: Parameters<typeof createLoadFilter>[0], exclude?: Parameters<typeof createLoadFilter>[1]) {
@@ -77,14 +76,6 @@ describe('vite-plugin', () => {
           path: '/images/photo.jpg',
           query: ''
         })
-      })
-    })
-
-    describe('getResourceQuery', () => {
-      it('should keep the query as is', () => {
-        expect(getResourceQuery('/images/photo.jpg?{ "width": [320] }')).toBe(
-          '?{ "width": [320] }'
-        )
       })
     })
   })

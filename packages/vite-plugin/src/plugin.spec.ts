@@ -1,7 +1,8 @@
 import {
   describe,
   it,
-  expect
+  expect,
+  vi
 } from 'vitest'
 import {
   mkdir,
@@ -177,6 +178,49 @@ export default logo
         expect(exports.default).toBe('/assets/logo.png')
       })
 
+      it('should reuse the disk cache across builds', async () => {
+        const dir = await createFixtureProject(ruleEntry)
+        const optimize = vi.fn((contents: Buffer) => contents)
+        const buildOptions = {
+          skipOptimization: false,
+          optimization: {
+            jpg: optimize
+          }
+        }
+        const first = await buildFixture(dir, buildOptions)
+        const generatedCalls = optimize.mock.calls.length
+
+        expect(generatedCalls).toBeGreaterThan(0)
+
+        const second = await buildFixture(dir, buildOptions)
+
+        expect(optimize.mock.calls.length).toBe(generatedCalls)
+        expect(second.exports.srcSet.length).toBe(4)
+        expect(second.exports.default).toBe(first.exports.default)
+        expect(second.assets.length).toBe(first.assets.length)
+      })
+
+      it('should regenerate with the cache disabled', async () => {
+        const dir = await createFixtureProject(ruleEntry)
+        const optimize = vi.fn((contents: Buffer) => contents)
+        const buildOptions = {
+          skipOptimization: false,
+          cache: false,
+          optimization: {
+            jpg: optimize
+          }
+        }
+        const first = await buildFixture(dir, buildOptions)
+        const generatedCalls = optimize.mock.calls.length
+
+        expect(generatedCalls).toBeGreaterThan(0)
+        expect(first.exports.srcSet.length).toBe(4)
+
+        await buildFixture(dir, buildOptions)
+
+        expect(optimize.mock.calls.length).toBe(generatedCalls * 2)
+      })
+
       it('should export placeholder data-url when enabled', async () => {
         const dir = await createFixtureProject(defaultEntry)
         const { exports } = await buildFixture(dir, {
@@ -193,6 +237,62 @@ export default logo
     })
 
     describe('dev', () => {
+      it('should serve variants under a non-root base', async () => {
+        const dir = await createFixtureProject(ruleEntry)
+        const server = await createServer({
+          configFile: false,
+          logLevel: 'error',
+          root: dir,
+          base: '/assets/',
+          plugins: [srcset({
+            skipOptimization: true
+          })]
+        })
+
+        try {
+          await server.listen()
+
+          const address = server.httpServer?.address()
+          const port = typeof address === 'object' && address ? address.port : 0
+          const exports = await server.ssrLoadModule('/entry.js') as ModuleExports
+
+          expect(exports.default).toBe('/assets/@srcset/image.jpg')
+
+          const response = await fetch(`http://localhost:${port}${exports.default}`)
+
+          expect(response.status).toBe(200)
+        } finally {
+          await server.close()
+        }
+      })
+
+      it('should serve stable variants across server restarts', async () => {
+        const dir = await createFixtureProject(ruleEntry)
+        const load = async () => {
+          const server = await createServer({
+            configFile: false,
+            logLevel: 'error',
+            root: dir,
+            plugins: [srcset({
+              skipOptimization: true
+            })]
+          })
+
+          try {
+            await server.listen()
+
+            return await server.ssrLoadModule('/entry.js') as ModuleExports
+          } finally {
+            await server.close()
+          }
+        }
+        const first = await load()
+        const second = await load()
+
+        expect(second.srcSet.length).toBe(4)
+        expect(second.srcSet).toEqual(first.srcSet)
+      })
+
       it('should serve module and variants from dev server', async () => {
         const dir = await createFixtureProject(ruleEntry)
         const server = await createServer({
@@ -213,7 +313,7 @@ export default logo
           const halfWidth = imageWidth / 2
 
           expect(exports.srcSet.length).toBe(4)
-          expect(exports.default).toMatch(/^\/@srcset\/image\.[0-9a-f]{8}\.jpg$/)
+          expect(exports.default).toBe('/@srcset/image.jpg')
 
           const webpUrl = exports.srcMap[`webp${halfWidth}`]
           const response = await fetch(`http://localhost:${port}${webpUrl}`)

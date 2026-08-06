@@ -1,30 +1,186 @@
 import {
   describe,
   it,
-  expect
+  expect,
+  vi
 } from 'vitest'
+import type {
+  IncomingMessage,
+  ServerResponse
+} from 'node:http'
+import { Writable } from 'node:stream'
 import {
-  type DevCache,
-  addDevImage
-} from './dev.ts'
+  mkdtemp,
+  rm
+} from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { SrcSetCacheStorage } from '@srcset/core'
+import { createDevMiddleware } from './dev.ts'
+
+async function createStorage() {
+  const dir = await mkdtemp(path.join(tmpdir(), 'srcset-dev-'))
+
+  return {
+    dir,
+    storage: new SrcSetCacheStorage(dir)
+  }
+}
+
+function createResponse() {
+  const chunks: Buffer[] = []
+  const headers: Record<string, string> = {}
+  const stream = new Writable({
+    write(chunk: Buffer, _encoding, callback) {
+      chunks.push(chunk)
+      callback()
+    }
+  })
+  const response = Object.assign(stream, {
+    headers,
+    statusCode: 200,
+    setHeader: (name: string, value: string) => {
+      headers[name] = value
+    }
+  })
+
+  return {
+    response: response as unknown as ServerResponse,
+    headers,
+    body: () => Buffer.concat(chunks),
+    finished: new Promise<void>((resolvePromise) => {
+      stream.on('finish', resolvePromise)
+    }),
+    statusCode: () => response.statusCode
+  }
+}
 
 describe('vite-plugin', () => {
   describe('dev', () => {
-    describe('addDevImage', () => {
-      it('should encode special characters in the pathname', () => {
-        const cache: DevCache = new Map()
-        const pathname = addDevImage(cache, {
-          path: '/images/my photo#1.jpg',
-          contents: Buffer.from('contents'),
-          format: 'jpg',
-          width: 640,
-          height: 480,
-          postfix: '',
-          originMultiplier: 1
-        })
+    describe('createDevMiddleware', () => {
+      it('should stream stored variants', async () => {
+        const { storage } = await createStorage()
+        const contents = Buffer.from('variant')
 
-        expect(pathname).toMatch(/^\/@srcset\/my%20photo%231\.[0-9a-f]{8}\.jpg$/)
-        expect(cache.has(pathname)).toBe(true)
+        await storage.write('image.webp', contents)
+
+        const middleware = createDevMiddleware(storage)
+        const request = {
+          url: '/@srcset/image.webp'
+        } as IncomingMessage
+        const {
+          response,
+          headers,
+          body,
+          finished
+        } = createResponse()
+        const next = vi.fn()
+
+        middleware(request, response, next)
+        await finished
+
+        expect(next).not.toHaveBeenCalled()
+        expect(headers['Content-Type']).toBe('image/webp')
+        expect(body()).toEqual(contents)
+      })
+
+      it('should respond with 404 when the file is cleaned away', async () => {
+        const {
+          dir,
+          storage
+        } = await createStorage()
+
+        await storage.write('image.webp', Buffer.from('variant'))
+        await rm(path.join(dir, 'image.webp'))
+
+        const middleware = createDevMiddleware(storage)
+        const request = {
+          url: '/@srcset/image.webp'
+        } as IncomingMessage
+        const {
+          response,
+          finished,
+          statusCode
+        } = createResponse()
+        const next = vi.fn()
+
+        middleware(request, response, next)
+        await finished
+
+        expect(next).not.toHaveBeenCalled()
+        expect(statusCode()).toBe(404)
+      })
+
+      it('should serve variants under a non-root base', async () => {
+        const { storage } = await createStorage()
+        const contents = Buffer.from('variant')
+
+        await storage.write('image.webp', contents)
+
+        const middleware = createDevMiddleware(storage, '/assets/')
+        const request = {
+          url: '/assets/@srcset/image.webp'
+        } as IncomingMessage
+        const {
+          response,
+          body,
+          finished
+        } = createResponse()
+        const next = vi.fn()
+
+        middleware(request, response, next)
+        await finished
+
+        expect(next).not.toHaveBeenCalled()
+        expect(body()).toEqual(contents)
+      })
+
+      it('should serve variants with a query string', async () => {
+        const { storage } = await createStorage()
+        const contents = Buffer.from('variant')
+
+        await storage.write('image.webp', contents)
+
+        const middleware = createDevMiddleware(storage)
+        const request = {
+          url: '/@srcset/image.webp?v=1'
+        } as IncomingMessage
+        const {
+          response,
+          body,
+          finished
+        } = createResponse()
+        const next = vi.fn()
+
+        middleware(request, response, next)
+        await finished
+
+        expect(next).not.toHaveBeenCalled()
+        expect(body()).toEqual(contents)
+      })
+
+      it('should pass foreign and unsafe urls to the next handler', async () => {
+        const { storage } = await createStorage()
+        const middleware = createDevMiddleware(storage)
+        const next = vi.fn()
+
+        middleware({
+          url: '/assets/logo.svg'
+        } as IncomingMessage, createResponse().response, next)
+        middleware({
+          url: '/api?next=/@srcset/image.webp'
+        } as IncomingMessage, createResponse().response, next)
+        middleware({
+          url: '/@srcset/%'
+        } as IncomingMessage, createResponse().response, next)
+        middleware({
+          url: '/@srcset/..%2Fsecret.jpg'
+        } as IncomingMessage, createResponse().response, next)
+        middleware({
+          url: '/@srcset/manifest.json'
+        } as IncomingMessage, createResponse().response, next)
+
+        expect(next).toHaveBeenCalledTimes(5)
       })
     })
   })
