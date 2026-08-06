@@ -55,9 +55,13 @@ describe('bundler-utils', () => {
         expect(parseResourceQuery('?srcset&unknown=1')).toEqual({})
       })
 
-      it('should return empty options for query without question mark', () => {
+      it('should parse query without the leading question mark', () => {
         expect(parseResourceQuery('')).toEqual({})
-        expect(parseResourceQuery('srcset')).toEqual({})
+        expect(parseResourceQuery('width=320')).toEqual({
+          select: {
+            width: 320
+          }
+        })
       })
     })
   })
