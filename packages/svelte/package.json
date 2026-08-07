@@ -1,0 +1,88 @@
+{
+  "name": "@srcset/svelte",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Svelte components for responsive images: Picture and Image.",
+  "author": {
+    "name": "Dan Onoshko",
+    "email": "danon0404@gmail.com",
+    "url": "https://github.com/dangreen"
+  },
+  "license": "MIT",
+  "homepage": "https://srcset.js.org/components/svelte/",
+  "funding": "https://ko-fi.com/dangreen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TrigenSoftware/srcset.git",
+    "directory": "packages/svelte"
+  },
+  "bugs": {
+    "url": "https://github.com/TrigenSoftware/srcset/issues"
+  },
+  "keywords": [
+    "srcset",
+    "image",
+    "picture",
+    "responsive",
+    "svelte",
+    "components"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "svelte": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "publishConfig": {
+    "exports": {
+      "./package.json": "./package.json",
+      ".": {
+        "types": "./dist/index.d.ts",
+        "svelte": "./dist/index.js",
+        "default": "./dist/index.js"
+      }
+    },
+    "directory": "package",
+    "linkDirectory": false
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clear:package": "del ./package",
+    "clear:dist": "del ./dist",
+    "clear:specs": "del './dist/**/*.spec.*'",
+    "clear": "del ./package ./dist ./coverage ./.svelte-kit",
+    "prepublishOnly": "run build clear:package clean-publish",
+    "postpublish": "pnpm clear:package",
+    "build:dist": "svelte-package --input ./src --output ./dist",
+    "build": "run clear:dist build:dist clear:specs",
+    "lint": "oxlint",
+    "format": "oxlint --fix",
+    "test:unit": "vitest run --coverage",
+    "test:unit:watch": "vitest watch",
+    "test:types": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "run -p lint test:unit test:types"
+  },
+  "peerDependencies": {
+    "@srcset/runtime": "workspace:^",
+    "svelte": ">=5"
+  },
+  "devDependencies": {
+    "@srcset/runtime": "workspace:^",
+    "@sveltejs/package": "^2.0.0",
+    "@sveltejs/vite-plugin-svelte": "^6.0.0",
+    "@testing-library/dom": "^10.0.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/svelte": "^5.2.0",
+    "happy-dom": "^20.0.0",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.9.0"
+  }
+}
