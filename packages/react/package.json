@@ -1,0 +1,88 @@
+{
+  "name": "@srcset/react",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "React components for responsive images: Picture and Image.",
+  "author": {
+    "name": "Dan Onoshko",
+    "email": "danon0404@gmail.com",
+    "url": "https://github.com/dangreen"
+  },
+  "license": "MIT",
+  "homepage": "https://srcset.js.org/components/react/",
+  "funding": "https://ko-fi.com/dangreen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TrigenSoftware/srcset.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/TrigenSoftware/srcset/issues"
+  },
+  "keywords": [
+    "srcset",
+    "image",
+    "picture",
+    "responsive",
+    "react",
+    "components"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      "./package.json": "./package.json",
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "directory": "package",
+    "linkDirectory": false
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clear:package": "del ./package",
+    "clear:dist": "del ./dist",
+    "clear": "del ./package ./dist ./coverage",
+    "prepublishOnly": "run build clear:package clean-publish",
+    "postpublish": "pnpm clear:package",
+    "emitDeclarations": "tsc -p ./tsconfig.build.json --emitDeclarationOnly",
+    "build:dist": "run -p emitDeclarations [ vite build ]",
+    "build": "run clear:dist build:dist",
+    "lint": "oxlint",
+    "format": "oxlint --fix",
+    "test:unit": "vitest run --coverage",
+    "test:unit:watch": "vitest watch",
+    "test:size": "size-limit",
+    "test:types": "tsc --noEmit",
+    "test": "run -p lint test:unit test:types"
+  },
+  "peerDependencies": {
+    "@srcset/runtime": "workspace:^",
+    "react": ">=19",
+    "react-dom": ">=19"
+  },
+  "devDependencies": {
+    "@size-limit/preset-small-lib": "^12.0.0",
+    "@srcset/runtime": "workspace:^",
+    "@testing-library/dom": "^10.0.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^19.2.4",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "happy-dom": "^20.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "size-limit": "^12.0.0"
+  }
+}
