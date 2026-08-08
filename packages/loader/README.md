@@ -34,7 +34,7 @@
 - 🧩 Image imports are processed by default - no query markers required
 - 🌳 Tree-shakable image modules: unused exports are dropped from the bundle
 - 🌫 Blur-up placeholders inlined as data-urls
-- 🌐 Pluggable backends: encode with [sharp](https://sharp.pixelplumbing.com/) or build [imgproxy](https://npmjs.com/package/@srcset/imgproxy) / [Cloudflare](https://npmjs.com/package/@srcset/cloudflare) urls
+- 🖼 Variants encoded with [sharp](https://sharp.pixelplumbing.com/): widths, modern formats and optimization
 
 ## Install
 

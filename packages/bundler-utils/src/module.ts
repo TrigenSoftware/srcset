@@ -19,17 +19,13 @@ export const defaultResourceId: ResourceIdFormatter = (width, _requestedWidth, f
 const emptyUrlExpression = "''"
 
 /**
- * Make a JS expression for the image variant url: plain urls are encoded,
- * emitted images without a plain public url are prefixed with the
- * public path expression of the integration, like `__webpack_public_path__`.
- * @param url - Plain url string, or the emitted image paths.
+ * Make a JS expression for the image variant url: emitted images
+ * without a plain public url are prefixed with the public path
+ * expression of the integration, like `__webpack_public_path__`.
+ * @param url - Emitted image paths.
  * @returns JS expression string.
  */
-function toUrlExpression(url: string | SrcSetImagePaths) {
-  if (typeof url === 'string') {
-    return JSON.stringify(url)
-  }
-
+function toUrlExpression(url: SrcSetImagePaths) {
   if (url.publicPath !== null) {
     return JSON.stringify(url.publicPath)
   }

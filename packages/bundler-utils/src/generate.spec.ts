@@ -1,16 +1,10 @@
 import {
   describe,
   it,
-  expect,
-  vi
+  expect
 } from 'vitest'
 import sharp from 'sharp'
-import pLimit from 'p-limit'
-import type { SrcSetBackend } from './generate.types.ts'
-import {
-  generateSrcSetModule,
-  srcsetBackend
-} from './generate.ts'
+import { generateSrcSetModule } from './generate.ts'
 
 async function createImage(width = 640, height = 480) {
   const contents = await sharp({
@@ -139,27 +133,6 @@ describe('bundler-utils', () => {
         expect(module).toMatch(/export const placeholder = "data:image\/webp;base64,[^"]+";/)
       })
 
-      it('should pass options, emitImage and limit to the backend', async () => {
-        const limit = pLimit(1)
-        let received: unknown[] = []
-        const backend: typeof srcsetBackend = (backendOptions, backendEmitImage, backendLimit) => {
-          received = [backendOptions, backendEmitImage, backendLimit]
-
-          return srcsetBackend(backendOptions, backendEmitImage, backendLimit)
-        }
-        const image = await createImage()
-        const options = {
-          skipOptimization: true,
-          backend
-        }
-
-        await generateSrcSetModule(image, {}, options, emitToPath, limit)
-
-        expect(received[0]).toBe(options)
-        expect(received[1]).toBe(emitToPath)
-        expect(received[2]).toBe(limit)
-      })
-
       it('should build public path expression without a plain public path', async () => {
         const image = await createImage()
         const module = await generateSrcSetModule(image, {}, {
@@ -183,35 +156,6 @@ describe('bundler-utils', () => {
         }))
 
         expect(module).toContain('const url = "/images/image.jpg";')
-      })
-
-      it('should use url variants without emitting', async () => {
-        const image = await createImage()
-        const emitImage = vi.fn(emitToPath)
-        const urlBackend: SrcSetBackend = {
-          * generate(_source, metadata, rule) {
-            const [width = 1] = Array.isArray(rule.width) ? rule.width : [rule.width]
-
-            yield {
-              format: metadata.format,
-              width: width <= 1 ? metadata.width : width,
-              height: metadata.height,
-              originMultiplier: width <= 1 ? width : null,
-              url: `https://proxy.test/w:${String(width)}`
-            }
-          }
-        }
-        const module = await generateSrcSetModule(image, {}, {
-          backend: () => urlBackend,
-          rules: [
-            {
-              width: [320]
-            }
-          ]
-        }, emitImage)
-
-        expect(emitImage).not.toHaveBeenCalled()
-        expect(module).toContain('const url = "https://proxy.test/w:320";')
       })
     })
   })

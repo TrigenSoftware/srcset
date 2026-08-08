@@ -2,7 +2,7 @@
   "name": "@srcset/imgproxy",
   "type": "module",
   "version": "1.0.0",
-  "description": "Adapter for imgproxy: srcset variant urls for content images and static assets.",
+  "description": "Adapter for imgproxy: srcset variant urls for content images, e.g. from an API or a CMS.",
   "author": {
     "name": "Dan Onoshko",
     "email": "danon0404@gmail.com",

@@ -16,7 +16,7 @@ Highly customizable tools for generating [responsive images](https://developer.m
 - ⚡️ Powered by [sharp](https://sharp.pixelplumbing.com/)
 - 🧩 [Webpack](https://webpack.js.org/), [Rspack](https://rspack.rs/) and [Vite](https://vite.dev/) integrations
 - 🖼 Сomponents for React, Preact and Svelte: blur-up placeholders, priority loading, tree-shakable image modules
-- 🌐 Image proxy backends - [imgproxy](https://imgproxy.net/) and [Cloudflare](https://developers.cloudflare.com/images/) - build variant urls on top of emitted originals and CMS content images
+- 🌐 Image proxy adapters - [imgproxy](https://imgproxy.net/) and [Cloudflare](https://developers.cloudflare.com/images/) - runtime srcset urls for content images, e.g. from an API or a CMS
 
 For more details, guides and API references, check out the [documentation website](https://srcset.js.org).
 
@@ -29,8 +29,8 @@ For more details, guides and API references, check out the [documentation websit
 | [`@srcset/runtime`](packages/runtime#readme) | Browser runtime helpers: srcset strings and attributes of image variants. | [![NPM version][runtime-npm]][runtime-npm-url] |
 | [`@srcset/loader`](packages/loader#readme) | Webpack and Rspack loader for generating responsive images. | [![NPM version][loader-npm]][loader-npm-url] |
 | [`@srcset/vite-plugin`](packages/vite-plugin#readme) | Vite plugin for generating responsive images. | [![NPM version][vite-plugin-npm]][vite-plugin-npm-url] |
-| [`@srcset/imgproxy`](packages/imgproxy#readme) | Adapter for imgproxy: srcset variant urls for content images and static assets. | [![NPM version][imgproxy-npm]][imgproxy-npm-url] |
-| [`@srcset/cloudflare`](packages/cloudflare#readme) | Adapter for Cloudflare image transformations: srcset variant urls for content images and static assets. | [![NPM version][cloudflare-npm]][cloudflare-npm-url] |
+| [`@srcset/imgproxy`](packages/imgproxy#readme) | Adapter for imgproxy: srcset variant urls for content images, e.g. from an API or a CMS. | [![NPM version][imgproxy-npm]][imgproxy-npm-url] |
+| [`@srcset/cloudflare`](packages/cloudflare#readme) | Adapter for Cloudflare image transformations: srcset variant urls for content images, e.g. from an API or a CMS. | [![NPM version][cloudflare-npm]][cloudflare-npm-url] |
 | [`@srcset/react`](packages/react#readme) | React components for responsive images: Picture and Image. | [![NPM version][react-npm]][react-npm-url] |
 | [`@srcset/preact`](packages/preact#readme) | Preact components for responsive images: Picture and Image. | [![NPM version][preact-npm]][preact-npm-url] |
 | [`@srcset/svelte`](packages/svelte#readme) | Svelte components for responsive images: Picture and Image. | [![NPM version][svelte-npm]][svelte-npm-url] |
