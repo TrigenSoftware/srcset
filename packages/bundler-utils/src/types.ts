@@ -1,5 +1,4 @@
 import type {
-  ImageFormat,
   Matcher,
   GenerateOptions
 } from '@srcset/core'
@@ -22,33 +21,6 @@ export interface SrcSetImagePaths {
    * e.g. `__webpack_public_path__` of webpack.
    */
   publicPathExpression?: string
-}
-
-/**
- * Image produced by a backend: the variant url and its properties.
- */
-export interface SrcSetBackendImage {
-  /**
-   * Image format.
-   */
-  format: ImageFormat
-  /**
-   * Image width in pixels.
-   */
-  width: number
-  /**
-   * Image height in pixels.
-   */
-  height: number
-  /**
-   * Width multiplier relative to the original image, if the variant was requested with one.
-   */
-  originMultiplier: number | null
-  /**
-   * Image variant url: a plain url string, or the paths
-   * of the image emitted with `EmitImage`.
-   */
-  url: string | SrcSetImagePaths
 }
 
 /**

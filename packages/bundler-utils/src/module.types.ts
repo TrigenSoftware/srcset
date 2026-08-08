@@ -1,5 +1,5 @@
 import type { ImageFormat } from '@srcset/core'
-import type { SrcSetBackendImage } from './types.ts'
+import type { SrcSetImagePaths } from './types.ts'
 
 /**
  * Resource id formatter function.
@@ -11,19 +11,39 @@ import type { SrcSetBackendImage } from './types.ts'
 export type ResourceIdFormatter = (width: number, requestedWidth: number, format: ImageFormat) => string
 
 /**
- * Generated image variant entry of the module: the backend image plus
- * the resource id and the mime type. Serialized to the runtime
+ * Generated image variant entry of the module: the emitted image paths
+ * plus the variant properties. Serialized to the runtime
  * `SrcSetEntry` shape in the module code.
  */
-export interface SrcSetModuleEntry extends SrcSetBackendImage {
+export interface SrcSetModuleEntry {
   /**
    * Resource id of the variant.
    */
   id: string
   /**
+   * Image format.
+   */
+  format: ImageFormat
+  /**
    * Image mime type.
    */
   type: string
+  /**
+   * Image width in pixels.
+   */
+  width: number
+  /**
+   * Image height in pixels.
+   */
+  height: number
+  /**
+   * Width multiplier relative to the original image, if the variant was requested with one.
+   */
+  originMultiplier: number | null
+  /**
+   * Paths of the image variant emitted with `EmitImage`.
+   */
+  url: SrcSetImagePaths
 }
 
 /**

@@ -29,10 +29,9 @@
 [coverage]: https://img.shields.io/codecov/c/github/TrigenSoftware/srcset.svg
 [coverage-url]: https://app.codecov.io/gh/TrigenSoftware/srcset
 
-Shared machinery of the [srcset](https://github.com/TrigenSoftware/srcset#readme) bundler integrations: import query parsing, image module codegen and the backend contract.
+Shared machinery of the [srcset](https://github.com/TrigenSoftware/srcset#readme) bundler integrations: import query parsing and image module codegen.
 
 - 🧩 Build custom bundler integrations on top of `generateSrcSetModule`
-- 🌐 Implement custom image backends - encode variants or build image proxy urls
 
 ## Install
 
@@ -55,8 +54,8 @@ const module = await generateSrcSetModule(source, query, options, emitImage, lim
 // ES module code: default url, src, srcSet, srcMap and placeholder exports
 ```
 
-You probably need [@srcset/loader](https://npmjs.com/package/@srcset/loader) or [@srcset/vite-plugin](https://npmjs.com/package/@srcset/vite-plugin) instead, unless you are building an integration or a backend.
+You probably need [@srcset/loader](https://npmjs.com/package/@srcset/loader) or [@srcset/vite-plugin](https://npmjs.com/package/@srcset/vite-plugin) instead, unless you are building an integration.
 
 ## Documentation
 
-For more details, guides and API references, check out the [documentation website](https://srcset.js.org/api/backends/).
+For more details, guides and API references, check out the [documentation website](https://srcset.js.org/api/bundler-utils/).

@@ -115,55 +115,6 @@ describe('vite-plugin', () => {
         expect(assets.length).toBe(4)
       })
 
-      it('should emit the original for a backend enforcing public path', async () => {
-        const dir = await createFixtureProject(defaultEntry)
-        const urlBackend = (
-          _options: unknown,
-          emitImage: (image: unknown) => {
-            outputPath: string
-            publicPath: string | null
-          }
-        ) => ({
-          * generate(source: {
-            path: string
-            contents: Buffer
-          }, metadata: {
-            format: string
-            width: number
-            height: number
-          }) {
-            const { publicPath: publicUrl } = emitImage({
-              path: source.path,
-              contents: source.contents,
-              format: metadata.format,
-              width: metadata.width,
-              height: metadata.height,
-              postfix: '',
-              originMultiplier: 1
-            })
-
-            yield {
-              format: metadata.format,
-              width: metadata.width,
-              height: metadata.height,
-              originMultiplier: 1,
-              url: `https://proxy.test/plain${publicUrl ?? ''}`
-            }
-          }
-        })
-        const {
-          assets,
-          exports
-        } = await buildFixture(dir, {
-          backend: urlBackend
-        })
-        const [original] = assets
-
-        expect(assets.length).toBe(1)
-        // The `__VITE_ASSET__` placeholder is replaced inside the built url string.
-        expect(exports.default).toBe(`https://proxy.test/plain/assets/${original.fileName}`)
-      })
-
       it('should leave public directory imports to Vite', async () => {
         const dir = await createFixtureProject(`import logo from '/logo.png'
 export default logo

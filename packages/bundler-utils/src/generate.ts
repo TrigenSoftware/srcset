@@ -9,7 +9,6 @@ import {
 import type { QueryOptions } from './query.ts'
 import type {
   SrcSetModuleOptions,
-  SrcSetBackendFactory,
   EmitImage
 } from './generate.types.ts'
 import {
@@ -22,42 +21,14 @@ import { createPlaceholder } from './placeholder.ts'
 export type * from './generate.types.ts'
 
 /**
- * The default backend factory: generates images with the sharp
- * generator and emits them on the bundler side.
- * @param options - Generator options.
- * @param emitImage - Emits an image on the bundler side.
- * @param limit - Concurrency limit of the integration.
- * @returns Backend.
- */
-export const srcsetBackend: SrcSetBackendFactory = (options, emitImage, limit) => {
-  const generator = new SrcSetGenerator({
-    ...options,
-    limit
-  })
-
-  return {
-    async* generate(source, _metadata, rule) {
-      for await (const image of generator.generate(source, rule)) {
-        yield {
-          format: image.format,
-          width: image.width,
-          height: image.height,
-          originMultiplier: image.originMultiplier,
-          url: emitImage(image)
-        }
-      }
-    }
-  }
-}
-
-/**
  * Generate ES module code for the image import: match the rules,
- * collect the images from the backend and make the module code.
+ * generate the image variants with the sharp generator, emit them
+ * on the bundler side and make the module code.
  * @param source - Image file.
  * @param query - Parsed import query options.
  * @param options - Bundler integration options.
- * @param emitImage - Emits an image on the bundler side, passed to the backend.
- * @param limit - Concurrency limit of the integration, passed to the backend.
+ * @param emitImage - Emits an image on the bundler side.
+ * @param limit - Concurrency limit of the integration.
  * @returns Module code.
  */
 export async function generateSrcSetModule(
@@ -67,12 +38,12 @@ export async function generateSrcSetModule(
   emitImage: EmitImage,
   limit?: LimitFunction
 ) {
-  const {
-    backend: backendFactory = srcsetBackend,
-    resourceId = defaultResourceId
-  } = options
+  const { resourceId = defaultResourceId } = options
   const rules = query.rules ?? options.rules ?? [{}]
-  const backend = backendFactory(options, emitImage, limit)
+  const generator = new SrcSetGenerator({
+    ...options,
+    limit
+  })
   const metadata = await getImageMetadata(source)
   const placeholder = await createPlaceholder(
     source,
@@ -94,11 +65,15 @@ export async function generateSrcSetModule(
       continue
     }
 
-    for await (const image of backend.generate(source, metadata, rule)) {
+    for await (const image of generator.generate(source, rule)) {
       srcSet.push({
-        ...image,
         id: resourceId(image.width, image.originMultiplier ?? image.width, image.format),
-        type: mimeTypes[image.format]
+        format: image.format,
+        type: mimeTypes[image.format],
+        width: image.width,
+        height: image.height,
+        originMultiplier: image.originMultiplier,
+        url: emitImage(image)
       })
     }
 
