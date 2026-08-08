@@ -1,0 +1,82 @@
+{
+  "name": "@srcset/imgproxy",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Adapter for imgproxy: srcset variant urls for content images and static assets.",
+  "author": {
+    "name": "Dan Onoshko",
+    "email": "danon0404@gmail.com",
+    "url": "https://github.com/dangreen"
+  },
+  "license": "MIT",
+  "homepage": "https://srcset.js.org/proxies/imgproxy/",
+  "funding": "https://ko-fi.com/dangreen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TrigenSoftware/srcset.git",
+    "directory": "packages/imgproxy"
+  },
+  "bugs": {
+    "url": "https://github.com/TrigenSoftware/srcset/issues"
+  },
+  "keywords": [
+    "srcset",
+    "image",
+    "responsive",
+    "imgproxy"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./sign": "./src/sign.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      "./package.json": "./package.json",
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./sign": {
+        "types": "./dist/sign.d.ts",
+        "default": "./dist/sign.js"
+      }
+    },
+    "directory": "package",
+    "linkDirectory": false
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clear:package": "del ./package",
+    "clear:dist": "del ./dist",
+    "clear": "del ./package ./dist ./coverage",
+    "prepublishOnly": "run build clear:package clean-publish",
+    "postpublish": "pnpm clear:package",
+    "emitDeclarations": "tsc -p ./tsconfig.build.json --emitDeclarationOnly",
+    "build:dist": "run -p emitDeclarations [ vite build ]",
+    "build": "run clear:dist build:dist",
+    "lint": "oxlint",
+    "format": "oxlint --fix",
+    "test:unit": "vitest run --coverage",
+    "test:unit:watch": "vitest watch",
+    "test:size": "size-limit",
+    "test:types": "tsc --noEmit",
+    "test": "run -p lint test:unit test:types"
+  },
+  "peerDependencies": {
+    "@srcset/runtime": "workspace:^"
+  },
+  "devDependencies": {
+    "@size-limit/preset-small-lib": "^12.0.0",
+    "@srcset/runtime": "workspace:^",
+    "@types/node": "^22.0.0",
+    "sharp": "^0.35.3",
+    "size-limit": "^12.0.0"
+  }
+}
