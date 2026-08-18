@@ -1,7 +1,8 @@
 import {
   describe,
   it,
-  expect
+  expect,
+  vi
 } from 'vitest'
 import sharp from 'sharp'
 import { generateSrcSetModule } from './generate.ts'
@@ -118,6 +119,26 @@ describe('bundler-utils', () => {
         expect(module).toContain('"jpg160"')
       })
 
+      it('should deduplicate variants of overlapping fallthrough rules', async () => {
+        const image = await createImage()
+        const emitImage = vi.fn(emitToPath)
+        const module = await generateSrcSetModule(image, {}, {
+          rules: [
+            {
+              fallthrough: true,
+              width: [0.5, 1]
+            },
+            {
+              width: [320, 0.25]
+            }
+          ]
+        }, emitImage)
+
+        expect(emitImage).toHaveBeenCalledTimes(3)
+        expect(module.match(/"jpg320":/g)?.length).toBe(1)
+        expect(module).toContain('"jpg160"')
+      })
+
       it('should inline placeholder data-url', async () => {
         const image = await createImage()
         const module = await generateSrcSetModule(
@@ -131,6 +152,119 @@ describe('bundler-utils', () => {
         )
 
         expect(module).toMatch(/export const placeholder = "data:image\/webp;base64,[^"]+";/)
+      })
+
+      it('should keep the configured placeholder options for the query flag', async () => {
+        const image = await createImage()
+        const module = await generateSrcSetModule(image, {
+          placeholder: true
+        }, {
+          skipOptimization: true,
+          placeholder: {
+            format: 'jpg'
+          }
+        }, emitToPath)
+
+        expect(module).toMatch(/export const placeholder = "data:image\/jpeg;base64,/)
+      })
+
+      it('should disable the placeholder from the query', async () => {
+        const image = await createImage()
+        const module = await generateSrcSetModule(image, {
+          placeholder: false
+        }, {
+          skipOptimization: true,
+          placeholder: {
+            format: 'jpg'
+          }
+        }, emitToPath)
+
+        expect(module).toContain('export const placeholder = undefined;')
+      })
+
+      it('should select the requested format at the first width of the rule', async () => {
+        const image = await createImage()
+        const module = await generateSrcSetModule(image, {
+          select: {
+            format: 'webp'
+          }
+        }, {
+          rules: [
+            {
+              format: ['jpg', 'webp'],
+              width: [1, 0.5]
+            }
+          ]
+        }, emitToPath)
+
+        expect(module).toContain('const url = "/images/image.webp";')
+      })
+
+      it('should select the requested width in the first format of the rule', async () => {
+        const image = await createImage()
+        const module = await generateSrcSetModule(image, {
+          select: {
+            width: 320
+          }
+        }, {
+          rules: [
+            {
+              format: ['webp', 'jpg'],
+              width: [1, 0.5]
+            }
+          ]
+        }, emitToPath)
+
+        expect(module).toContain('const url = "/images/image@320w.webp";')
+      })
+
+      it('should prefer the select from the query over the options', async () => {
+        const image = await createImage()
+        const module = await generateSrcSetModule(image, {
+          select: {
+            id: 'webp320'
+          }
+        }, {
+          select: {
+            id: 'jpg320'
+          },
+          rules: [
+            {
+              format: ['jpg', 'webp'],
+              width: [0.5]
+            }
+          ]
+        }, emitToPath)
+
+        expect(module).toContain('const url = "/images/image@320w.webp";')
+      })
+
+      it('should select the original variant without an explicit select', async () => {
+        const image = await createImage()
+        const module = await generateSrcSetModule(image, {}, {
+          rules: [
+            {
+              format: ['webp', 'jpg'],
+              width: [1, 0.5]
+            }
+          ]
+        }, emitToPath)
+
+        expect(module).toContain('const url = "/images/image.jpg";')
+      })
+
+      it('should fall back to the first variant when nothing matches the select', async () => {
+        const image = await createImage()
+        const module = await generateSrcSetModule(image, {}, {
+          rules: [
+            {
+              format: ['webp', 'jpg'],
+              width: [0.5]
+            }
+          ]
+        }, emitToPath)
+
+        expect(module).toContain('const url = "/images/image@320w.webp";')
       })
 
       it('should build public path expression without a plain public path', async () => {

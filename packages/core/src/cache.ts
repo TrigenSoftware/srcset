@@ -17,7 +17,10 @@ import type {
   ImageVariant,
   SrcSetImage
 } from './types.ts'
-import { resolveVariant } from './path.ts'
+import {
+  toPosixPath,
+  resolveVariant
+} from './path.ts'
 import {
   assertStoredPath,
   getTemporaryName,
@@ -25,6 +28,20 @@ import {
   serialize
 } from './cache.utils.ts'
 import { environment } from './cache.version.ts'
+
+const storedPathSeparator = '-'
+
+/**
+ * Make the stored file path of a variant: the storage is flat, so the
+ * manifest key prefixes the variant file name - names alone are not
+ * unique across sources and options.
+ * @param key - Manifest key of the variant.
+ * @param name - Variant file name.
+ * @returns Stored file path.
+ */
+export function getStoredPath(key: string, name: string) {
+  return `${key}${storedPathSeparator}${name}`
+}
 
 /**
  * Address of a cached variant: the manifest key and the stored file path.
@@ -35,7 +52,7 @@ export interface CacheAddress {
    */
   key: string
   /**
-   * Stored file path of the variant: the variant file name.
+   * Stored file path of the variant: the key-prefixed variant file name.
    */
   path: string
 }
@@ -57,8 +74,9 @@ interface CacheEntry {
  * together with its manifest, and the repeated generation with the same
  * source, options and variant reads it back instead of processing.
  * Function options, like custom optimizers, are keyed by their source text.
- * The stored files are named by the variant file name from `SrcSetImage.path`,
- * and can be read back with `read` and `readStream`.
+ * The stored files are named by the manifest key and the variant file name
+ * from `SrcSetImage.path`, and can be read back with `read` and `readStream`
+ * at the path made by `getStoredPath`.
  */
 export class SrcSetCacheStorage {
   private readonly dir: string
@@ -87,8 +105,7 @@ export class SrcSetCacheStorage {
       .update(environment)
       .update(source.contents)
       .update(serialize({
-        // Posix separators, so the keys are stable across platforms.
-        path: source.path.replaceAll('\\', '/'),
+        path: toPosixPath(source.path),
         variant,
         processing,
         optimization,
@@ -100,7 +117,7 @@ export class SrcSetCacheStorage {
 
     return {
       key,
-      path: parse(resolveVariant(context, variant).path).base
+      path: getStoredPath(key, parse(resolveVariant(context, variant).path).base)
     }
   }
 
@@ -112,14 +129,15 @@ export class SrcSetCacheStorage {
         this.read(address.path)
       ])
 
-      // Variant names are not unique across sources and options:
-      // a file overwritten by a colliding name is a miss.
+      // The stored path is keyed, so a mismatch means a damaged
+      // or half-written file rather than another entry: regenerate.
       if (entry.hash !== getContentsHash(contents)) {
         return null
       }
 
       return {
         path: entry.path,
+        cacheKey: address.key,
         contents,
         format: entry.format,
         width: entry.width,
@@ -176,6 +194,11 @@ export class SrcSetCacheStorage {
 
     if (image) {
       await this.writeEntry(address, image)
+
+      return {
+        ...image,
+        cacheKey: address.key
+      }
     }
 
     return image
@@ -183,8 +206,7 @@ export class SrcSetCacheStorage {
 
   /**
    * Write contents to the storage. An existing file is overwritten:
-   * variant names are not unique across option changes,
-   * stale contents must not survive.
+   * a repeated write of the same path carries the same contents.
    * @param path - Stored file path.
    * @param contents - File contents.
    * @returns Stored file path.

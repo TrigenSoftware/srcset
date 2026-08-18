@@ -75,14 +75,21 @@ describe('core', () => {
           const image = createImage()
           const fn = vi.fn(() => Promise.resolve(image))
           const generated = await storage.memo(context, variant, fn)
+          const { key } = storage.getKey(context, variant)
 
           expect(fn).toHaveBeenCalledTimes(1)
-          expect(generated).toEqual(image)
+          expect(generated).toEqual({
+            ...image,
+            cacheKey: key
+          })
 
           const cached = await new SrcSetCacheStorage(dir).memo(context, variant, fn)
 
           expect(fn).toHaveBeenCalledTimes(1)
-          expect(cached).toEqual(image)
+          expect(cached).toEqual({
+            ...image,
+            cacheKey: key
+          })
         })
 
         it('should miss on different variant or source', async () => {
@@ -120,7 +127,7 @@ describe('core', () => {
           expect(fn).toHaveBeenCalledTimes(2)
         })
 
-        it('should miss when the stored file is overwritten by a colliding name', async () => {
+        it('should miss when the stored file is damaged', async () => {
           const { storage } = await createStorage()
           const context = createContext()
           const variant = {
@@ -175,7 +182,10 @@ describe('core', () => {
           const regenerated = await storage.memo(context, variant, fn)
 
           expect(fn).toHaveBeenCalledTimes(2)
-          expect(regenerated).toEqual(createImage())
+          expect(regenerated).toEqual({
+            ...createImage(),
+            cacheKey: storage.getKey(context, variant).key
+          })
         })
       })
 
@@ -190,14 +200,33 @@ describe('core', () => {
           const address = storage.getKey(context, variant)
 
           expect(address.key).toMatch(/^[0-9a-f]{64}$/)
-          expect(address.path).toBe('image.webp')
+          expect(address.path).toBe(`${address.key}-image.webp`)
           expect(storage.getKey(context, variant)).toEqual(address)
         })
 
         it('should use the source file name for the svg passthrough', async () => {
           const { storage } = await createStorage()
+          const address = storage.getKey(createContext(), null)
 
-          expect(storage.getKey(createContext(), null).path).toBe('image.jpg')
+          expect(address.path).toBe(`${address.key}-image.jpg`)
+        })
+
+        it('should give colliding variant names distinct stored paths', async () => {
+          const { storage } = await createStorage()
+          const variant = {
+            format: 'webp' as const,
+            width: 0.5
+          }
+          const moved = createContext()
+
+          moved.source.path = '/other/image.jpg'
+
+          const address = storage.getKey(createContext(), variant)
+          const movedAddress = storage.getKey(moved, variant)
+
+          expect(address.path).not.toBe(movedAddress.path)
+          expect(address.path.endsWith('-image.webp')).toBe(true)
+          expect(movedAddress.path.endsWith('-image.webp')).toBe(true)
         })
       })
 

@@ -207,11 +207,59 @@ export default logo
           const port = typeof address === 'object' && address ? address.port : 0
           const exports = await server.ssrLoadModule('/entry.js') as ModuleExports
 
-          expect(exports.default).toBe('/assets/@srcset/image.jpg')
+          expect(exports.default).toMatch(/^\/assets\/@srcset\/[0-9a-f]{64}\/image\.jpg$/)
 
           const response = await fetch(`http://localhost:${port}${exports.default}`)
 
           expect(response.status).toBe(200)
+        } finally {
+          await server.close()
+        }
+      })
+
+      it('should serve same-named sources apart', async () => {
+        const dir = await createFixtureProject(`import a from './a/logo.jpg'
+import b from './b/logo.jpg'
+export { a as default, b as src }
+`)
+
+        await mkdir(path.join(dir, 'a'))
+        await mkdir(path.join(dir, 'b'))
+        await copyFile(path.join(dir, 'image.jpg'), path.join(dir, 'a', 'logo.jpg'))
+        await sharp({
+          create: {
+            width: imageWidth,
+            height: imageHeight,
+            channels: 3,
+            background: '#3a7bd5'
+          }
+        }).jpeg().toFile(path.join(dir, 'b', 'logo.jpg'))
+
+        const server = await createServer({
+          configFile: false,
+          logLevel: 'error',
+          root: dir,
+          plugins: [srcset({
+            skipOptimization: true
+          })]
+        })
+
+        try {
+          await server.listen()
+
+          const address = server.httpServer?.address()
+          const port = typeof address === 'object' && address ? address.port : 0
+          const exports = await server.ssrLoadModule('/entry.js') as ModuleExports
+          const secondUrl = exports.src as unknown as string
+
+          expect(exports.default).not.toBe(secondUrl)
+
+          const [first, second] = await Promise.all([
+            fetch(`http://localhost:${port}${exports.default}`).then(response => response.arrayBuffer()),
+            fetch(`http://localhost:${port}${secondUrl}`).then(response => response.arrayBuffer())
+          ])
+
+          expect(Buffer.from(first).equals(Buffer.from(second))).toBe(false)
         } finally {
           await server.close()
         }
@@ -264,7 +312,7 @@ export default logo
           const halfWidth = imageWidth / 2
 
           expect(exports.srcSet.length).toBe(4)
-          expect(exports.default).toBe('/@srcset/image.jpg')
+          expect(exports.default).toMatch(/^\/@srcset\/[0-9a-f]{64}\/image\.jpg$/)
 
           const webpUrl = exports.srcMap[`webp${halfWidth}`]
           const response = await fetch(`http://localhost:${port}${webpUrl}`)

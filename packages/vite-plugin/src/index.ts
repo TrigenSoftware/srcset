@@ -1,7 +1,7 @@
 export { srcset } from './plugin.ts'
+export type { SrcSetRule } from '@srcset/core'
 export type * from './types.ts'
 export type {
-  SrcSetRule,
   SrcSetEntrySelect,
   ResourceIdFormatter,
   PlaceholderOptions

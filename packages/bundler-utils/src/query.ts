@@ -1,4 +1,4 @@
-import type { SrcSetRule } from './types.ts'
+import type { SrcSetRule } from '@srcset/core'
 import type { SrcSetEntrySelect } from './module.ts'
 
 export interface QueryOptions {

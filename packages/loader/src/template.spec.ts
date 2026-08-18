@@ -36,6 +36,33 @@ describe('loader', () => {
         })).toBe('photo.webp')
       })
 
+      it('should replace sourceext token for a converted image', () => {
+        expect(interpolateName('[name][postfix][sourceext].[ext]', context)).toBe('photo@320w.jpg.webp')
+      })
+
+      it('should drop sourceext token when the format is kept', () => {
+        expect(interpolateName('[name][postfix][sourceext].[ext]', {
+          ...context,
+          format: 'jpg'
+        })).toBe('photo@320w.jpg')
+        expect(interpolateName('[name][sourceext].[ext]', {
+          ...context,
+          resourcePath: '/project/src/photo.jpeg',
+          format: 'jpg'
+        })).toBe('photo.jpg')
+      })
+
+      it('should keep converted siblings apart with the default development name', () => {
+        const jpg = interpolateName(defaultDevelopmentName, context)
+        const png = interpolateName(defaultDevelopmentName, {
+          ...context,
+          resourcePath: '/project/src/images/photo.png'
+        })
+
+        expect(jpg).toBe('images/photo@320w.jpg.webp')
+        expect(png).toBe('images/photo@320w.png.webp')
+      })
+
       it('should replace contenthash token with given length', () => {
         const name = interpolateName('[contenthash:12].[ext]', context)
 

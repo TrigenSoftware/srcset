@@ -14,7 +14,8 @@ import type {
   Postfix,
   SrcSetGeneratorOptions,
   GenerateOptions,
-  GenerateContext
+  GenerateContext,
+  SrcSetRule
 } from './types.ts'
 import {
   isSupportedFormat,
@@ -26,22 +27,54 @@ import {
   mergeProcessingOptions
 } from './defaults.ts'
 import { getImageMetadata } from './metadata.ts'
+import { matchImage } from './match.ts'
 import { resolveVariant } from './path.ts'
 import { parallel } from './parallel.ts'
 
 const animatableFormats = new Set<ImageFormat>(['gif', 'webp'])
 
-function createVariants(formats: ImageFormat[], widths: number[]) {
+function createVariants(context: GenerateContext, formats: ImageFormat[], widths: number[]) {
+  const { metadata } = context
   const uniqueFormats = new Set(formats)
   const uniqueWidths = new Set(widths)
   const variants: ImageVariant[] = []
+  const targets = new Map<string, number>()
 
   for (const format of uniqueFormats) {
     for (const width of uniqueWidths) {
-      variants.push({
+      const variant = {
         format,
         width
-      })
+      }
+      const {
+        requestedWidth,
+        targetWidth,
+        postfix
+      } = resolveVariant(context, variant)
+
+      if (!context.scalingUp && requestedWidth > metadata.width) {
+        continue
+      }
+
+      // Requested widths above the original resolve to the same target width:
+      // without this the same image is encoded, stored and emitted twice,
+      // under one name and with one `w` descriptor. The postfix is a part of
+      // the identity: a multiplier and an absolute width can resolve to the
+      // same pixels under different names, and both names are wanted.
+      const target = `${format}|${postfix}|${targetWidth}`
+      const index = targets.get(target)
+
+      if (index === undefined) {
+        targets.set(target, variants.length)
+        variants.push(variant)
+        continue
+      }
+
+      // One file requested both ways: keep the multiplier, it is what
+      // carries `originMultiplier` for the variant selection.
+      if (width <= 1 && variants[index].width > 1) {
+        variants[index] = variant
+      }
     }
   }
 
@@ -175,13 +208,49 @@ export class SrcSetGenerator {
       return
     }
 
-    const variants = createVariants(formats, widths)
+    const variants = createVariants(context, formats, widths)
 
     yield* parallel(
       variants,
       variant => this.memo(context, variant, () => this.processVariant(context, variant)),
       this.limit
     )
+  }
+
+  /**
+   * Create set of image variants from the source image by the rules:
+   * the first matching rule is applied, `fallthrough` keeps matching
+   * the rest. Rules resolving to one file produce it once, the first
+   * rule wins - as it does without `fallthrough`.
+   * @param source - Image file.
+   * @param rules - Rules to generate image variants.
+   * @yields Generated image variants.
+   */
+  async* generateAll(
+    source: ImageSource,
+    rules: SrcSetRule[]
+  ): AsyncGenerator<SrcSetImage, void> {
+    const paths = new Set<string>()
+
+    for (const rule of rules) {
+      if (!await matchImage(source, rule.match)) {
+        continue
+      }
+
+      for await (const image of this.generate(source, rule)) {
+        if (paths.has(image.path)) {
+          continue
+        }
+
+        paths.add(image.path)
+
+        yield image
+      }
+
+      if (!rule.fallthrough) {
+        break
+      }
+    }
   }
 
   /**
@@ -248,16 +317,10 @@ export class SrcSetGenerator {
     } = context
     const isMultiplier = width <= 1
     const {
-      requestedWidth,
       targetWidth,
       postfix,
       path
     } = resolveVariant(context, variant)
-
-    if (!context.scalingUp && requestedWidth > metadata.width) {
-      return null
-    }
-
     const willResize = targetWidth < metadata.width
     const passthrough = !willResize && format === metadata.format && context.skipOptimization
     let contents: Buffer
@@ -268,8 +331,11 @@ export class SrcSetGenerator {
       contents = source.contents
     } else {
       const animated = metadata.animated && animatableFormats.has(format)
+      // Browsers honour the EXIF orientation, and re-encoding drops it:
+      // rotate the pixels instead, so every variant renders the same way.
       const pipeline = sharp(source.contents, {
-        animated
+        animated,
+        autoOrient: true
       })
 
       if (willResize) {

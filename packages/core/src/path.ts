@@ -7,6 +7,16 @@ import type {
 } from './types.ts'
 
 /**
+ * Convert a file path to posix separators, so paths are stable
+ * across platforms: bundlers feed native and posix paths alike.
+ * @param filePath - File path in any platform form.
+ * @returns File path with posix separators.
+ */
+export function toPosixPath(filePath: string) {
+  return filePath.replaceAll('\\', '/')
+}
+
+/**
  * Add postfix and format extension to the image file path.
  * @param imagePath - Source image file path.
  * @param postfix - Postfix to add to the file name.
@@ -14,11 +24,10 @@ import type {
  * @returns Image variant file path.
  */
 export function renameImagePath(imagePath: string, postfix: string, format: ImageFormat) {
-  // Posix separators, so variant paths are stable across platforms.
   const {
     dir,
     name
-  } = path.parse(imagePath.replaceAll('\\', '/'))
+  } = path.parse(toPosixPath(imagePath))
 
   return path.format({
     dir,
@@ -84,7 +93,7 @@ export function resolveVariant(context: GenerateContext, variant: ImageVariant |
       requestedWidth: metadata.width,
       targetWidth: metadata.width,
       postfix: '',
-      path: source.path.replaceAll('\\', '/')
+      path: toPosixPath(source.path)
     }
   }
 

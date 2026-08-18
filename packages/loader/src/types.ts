@@ -9,10 +9,52 @@ import type { SrcSetModuleOptions } from '@srcset/bundler-utils'
  */
 export type PathResolver = (url: string, resourcePath: string, context: string) => string
 
+/**
+ * The part of the webpack and rspack loader context the loader uses.
+ * Declared structurally: both compilers satisfy it, and the published
+ * types stay usable without `webpack` installed - it is an optional peer.
+ */
+export interface SrcSetLoaderContext {
+  /**
+   * Absolute path of the source image file.
+   */
+  resourcePath: string
+  /**
+   * Import query string of the source image, with the leading `?`.
+   */
+  resourceQuery: string
+  /**
+   * Root context directory of the compiler.
+   */
+  rootContext: string
+  /**
+   * Compiler mode.
+   */
+  mode: string | undefined
+  /**
+   * Read the loader options.
+   * @returns Loader options.
+   */
+  getOptions(): SrcSetLoaderOptions
+  /**
+   * Emit a file to the build output.
+   * @param name - Output file path.
+   * @param content - File contents.
+   */
+  emitFile(name: string, content: string | Buffer): void
+  /**
+   * Switch the loader to the asynchronous mode.
+   * @returns Completion callback.
+   */
+  async(): (error?: Error | null, content?: string | Buffer) => void
+}
+
 export interface SrcSetLoaderOptions extends SrcSetModuleOptions {
   /**
    * Output file name template.
-   * Supports `[name]`, `[postfix]`, `[ext]`, `[path]` and `[hash]`/`[contenthash]` (with optional `:length`) tokens.
+   * Supports `[name]`, `[postfix]`, `[ext]`, `[path]`, `[sourceext]` and
+   * `[hash]`/`[contenthash]` (with optional `:length`) tokens. `[sourceext]`
+   * is the source file extension, empty when the output format matches it.
    */
   name?: string
   /**

@@ -1,4 +1,7 @@
-import type { ImageFormat } from '@srcset/core'
+import type {
+  ImageFormat,
+  SrcSetRule
+} from '@srcset/core'
 import {
   rest,
   alias,
@@ -7,7 +10,6 @@ import {
   option,
   readOptions
 } from 'argue-cli'
-import type { SrcSetCliRule } from './types.ts'
 
 export const usage = `srcset [...sources] [...options]
 
@@ -28,7 +30,7 @@ export interface CliArgs {
   help: boolean
   verbose: boolean | undefined
   sources: string[]
-  rule: SrcSetCliRule | null
+  rule: SrcSetRule | null
   skipOptimization: boolean | undefined
   scalingUp: boolean | undefined
   dest: string | undefined
@@ -64,7 +66,7 @@ export function parseCliArgs(): CliArgs {
     option(alias('config', 'c'), String),
     option('concurrency', Number)
   )
-  const rule: SrcSetCliRule = {
+  const rule: SrcSetRule = {
     ...match && {
       match
     },
@@ -75,11 +77,19 @@ export function parseCliArgs(): CliArgs {
       format: format as ImageFormat[]
     }
   }
+  const sources = rest()
+  // Whatever the readers did not take stays in `argv`: a leftover flag is a
+  // typo, and treating it as a glob would quietly match nothing.
+  const unknownOption = sources.find(source => source.startsWith('-'))
+
+  if (unknownOption) {
+    throw new Error(`Unknown option: "${unknownOption}".`)
+  }
 
   return {
     help: Boolean(help),
     verbose,
-    sources: rest(),
+    sources,
     rule: Object.keys(rule).length ? rule : null,
     skipOptimization,
     scalingUp,

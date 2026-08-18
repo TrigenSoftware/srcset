@@ -5,6 +5,7 @@ import {
   relative,
   sep
 } from 'node:path'
+import { normalizeFormat } from '@srcset/core'
 
 export interface TemplateContext {
   /**
@@ -30,12 +31,13 @@ export interface TemplateContext {
 }
 
 export const defaultProductionName = '[name][postfix].[contenthash:8].[ext]'
-export const defaultDevelopmentName = '[path][name][postfix].[ext]'
+export const defaultDevelopmentName = '[path][name][postfix][sourceext].[ext]'
 
 /**
  * Get default output file name template for the compilation mode.
  * Development template skips the content hash: readable and stable names,
- * cache busting is not needed there. Uniqueness comes from the `[path]` prefix.
+ * cache busting is not needed there. Uniqueness comes from the `[path]`
+ * prefix and, for converted images, from `[sourceext]`.
  * @param mode - Compilation mode.
  * @returns File name template.
  */
@@ -48,14 +50,16 @@ const hashPattern = /\[(?:content)?hash(?::(\d+))?\]/g
 
 /**
  * Interpolate output file name template.
- * @param template - File name template with `[name]`, `[postfix]`, `[ext]`, `[path]`, `[hash]`/`[contenthash]` tokens.
+ * @param template - File name template with `[name]`, `[postfix]`, `[ext]`,
+ * `[path]`, `[sourceext]`, `[hash]`/`[contenthash]` tokens.
  * @param context - Template context.
  * @returns Interpolated file name.
  */
 export function interpolateName(template: string, context: TemplateContext) {
   const {
     dir,
-    name
+    name,
+    ext
   } = parse(context.resourcePath)
   const relativeDir = relative(context.context, dir)
   // Resources outside the context get no path prefix: no parent
@@ -63,11 +67,16 @@ export function interpolateName(template: string, context: TemplateContext) {
   const dirPath = relativeDir && !relativeDir.startsWith('..') && !isAbsolute(relativeDir)
     ? `${relativeDir.replaceAll(sep, '/')}/`
     : ''
+  // Converted variants of same-named siblings would share a name without it,
+  // e.g. `hero.jpg` and `hero.png` both become `hero.webp`. Without a
+  // conversion it would only repeat the output extension, so it stays empty.
+  const sourceExt = normalizeFormat(ext.slice(1).toLowerCase()) === context.format ? '' : ext
   let hash: string | null = null
 
   return template
     .replaceAll('[path]', dirPath)
     .replaceAll('[name]', name)
+    .replaceAll('[sourceext]', sourceExt)
     .replaceAll('[postfix]', context.postfix)
     .replaceAll('[ext]', context.format)
     .replace(hashPattern, (_, length: string | undefined) => {

@@ -1,11 +1,10 @@
 /* oxlint-disable import/no-default-export */
-import type { LoaderContext } from 'webpack'
 import type { SrcSetImage } from '@srcset/core'
 import {
   parseResourceQuery,
   generateSrcSetModule
 } from '@srcset/bundler-utils'
-import type { SrcSetLoaderOptions } from './types.ts'
+import type { SrcSetLoaderContext } from './types.ts'
 import {
   interpolateName,
   getDefaultName
@@ -16,7 +15,7 @@ import {
 } from './paths.ts'
 import { getSharedLimit } from './limit.ts'
 
-async function generateModule(ctx: LoaderContext<SrcSetLoaderOptions>, contents: Buffer) {
+async function generateModule(ctx: SrcSetLoaderContext, contents: Buffer) {
   const options = ctx.getOptions()
   const {
     context = ctx.rootContext,
@@ -67,7 +66,7 @@ async function generateModule(ctx: LoaderContext<SrcSetLoaderOptions>, contents:
  * Webpack and Rspack loader for generating responsive images.
  * @param contents - Source image contents.
  */
-export default function srcSetLoader(this: LoaderContext<SrcSetLoaderOptions>, contents: Buffer) {
+export default function srcSetLoader(this: SrcSetLoaderContext, contents: Buffer) {
   const callback = this.async()
 
   generateModule(this, contents).then(

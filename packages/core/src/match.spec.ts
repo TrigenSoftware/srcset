@@ -51,6 +51,17 @@ describe('core', () => {
         expect(await matchImage(image, '**/*.png')).toBe(false)
       })
 
+      it('should match a windows path by path glob', async () => {
+        const image = await createImage('jpg')
+        const onWindows = {
+          ...image,
+          path: 'C:\\project\\src\\images\\image.jpg'
+        }
+
+        expect(await matchImage(onWindows, '**/images/*.jpg')).toBe(true)
+        expect(await matchImage(onWindows, '**/*.png')).toBe(false)
+      })
+
       it('should match by function', async () => {
         const image = await createImage('jpg')
 

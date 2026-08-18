@@ -128,6 +128,52 @@ describe('cli', () => {
       expect(written.some(file => file.includes('photo@160w.jpg'))).toBe(true)
     })
 
+    it('should write a variant of overlapping fallthrough rules once', async () => {
+      const dir = await createProject()
+      const written = await runIn(dir, {
+        src: 'images/**/*.jpg',
+        dest: 'dist',
+        skipOptimization: true,
+        rules: [
+          {
+            fallthrough: true,
+            width: [0.5]
+          },
+          {
+            width: [0.5, 0.25]
+          }
+        ]
+      })
+
+      expect(written.length).toBe(2)
+      expect(new Set(written).size).toBe(2)
+    })
+
+    it('should throw on an output path collision', async () => {
+      const dir = await createProject()
+      const contents = await sharp({
+        create: {
+          width: 320,
+          height: 240,
+          channels: 3,
+          background: '#d53a7b'
+        }
+      }).jpeg().toBuffer()
+
+      await mkdir(join(dir, 'other'))
+      await writeFile(join(dir, 'other/photo.jpg'), contents)
+
+      // Both sources sit outside the cwd, so both keep the file name only.
+      await expect(runIn(join(dir, 'images'), {
+        src: [join(dir, 'images/photo.jpg'), join(dir, 'other/photo.jpg')],
+        dest: 'dist',
+        skipOptimization: true,
+        rules: [{
+          width: [1]
+        }]
+      })).rejects.toThrow('collision')
+    })
+
     it('should throw without matched sources', async () => {
       const dir = await createProject()
 

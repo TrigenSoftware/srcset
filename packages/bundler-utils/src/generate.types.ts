@@ -1,11 +1,9 @@
 import type {
   SrcSetImage,
-  SrcSetGeneratorOptions
+  SrcSetGeneratorOptions,
+  SrcSetRule
 } from '@srcset/core'
-import type {
-  SrcSetRule,
-  SrcSetImagePaths
-} from './types.ts'
+import type { SrcSetImagePaths } from './types.ts'
 import type {
   SrcSetEntrySelect,
   ResourceIdFormatter

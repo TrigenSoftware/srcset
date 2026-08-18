@@ -29,7 +29,8 @@ export async function getImageMetadata(source: ImageSource): Promise<ImageMetada
     width,
     height,
     pages,
-    pageHeight
+    pageHeight,
+    autoOrient
   } = await sharp(source.contents).metadata()
   const normalizedFormat = normalizeFormat(format ?? getFormatFromPath(source.path))
 
@@ -37,17 +38,22 @@ export async function getImageMetadata(source: ImageSource): Promise<ImageMetada
     throw new Error(`Unsupported image format: "${String(normalizedFormat)}"`)
   }
 
-  const metadataHeight = pageHeight ?? height
+  const animated = (pages ?? 1) > 1
+  // Sharp reports the stored size, but browsers honour the EXIF orientation
+  // and the generator auto-orients, so the oriented pair is the real size.
+  // Animated frames keep the page height: orientation does not apply to them.
+  const metadataWidth = animated ? width : autoOrient.width || width
+  const metadataHeight = animated ? pageHeight ?? height : autoOrient.height || height
 
-  if (!width || !metadataHeight) {
+  if (!metadataWidth || !metadataHeight) {
     throw new Error(`Cannot read image dimensions: ${source.path}`)
   }
 
   const metadata: ImageMetadata = {
     format: normalizedFormat,
-    width,
+    width: metadataWidth,
     height: metadataHeight,
-    animated: (pages ?? 1) > 1
+    animated
   }
 
   cache.set(source.contents, metadata)

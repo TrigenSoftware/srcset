@@ -7,14 +7,14 @@ import {
 import { loadConfig } from './config.ts'
 import { run } from './run.ts'
 
-const args = parseCliArgs()
-
-if (args.help) {
-  console.info(usage)
-  process.exit(0)
-}
-
 try {
+  const args = parseCliArgs()
+
+  if (args.help) {
+    console.info(usage)
+    process.exit(0)
+  }
+
   const config = await loadConfig(args.config)
   const options: SrcSetCliOptions = {
     ...config,

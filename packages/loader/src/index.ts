@@ -3,9 +3,9 @@ export {
   default,
   raw
 } from './loader.ts'
+export type { SrcSetRule } from '@srcset/core'
 export type * from './types.ts'
 export type {
-  SrcSetRule,
   SrcSetEntrySelect,
   ResourceIdFormatter,
   PlaceholderOptions

@@ -9,6 +9,12 @@ import { parseCliArgs } from './args.ts'
 describe('cli', () => {
   describe('args', () => {
     describe('parseCliArgs', () => {
+      it('should reject an unrecognised option', () => {
+        setArgs('images/**/*.jpg', '--formats', 'webp', '--dest', 'dist')
+
+        expect(() => parseCliArgs()).toThrow('Unknown option: "--formats"')
+      })
+
       it('should parse sources and options', () => {
         setArgs(
           'images/**/*.jpg',

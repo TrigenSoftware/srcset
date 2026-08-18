@@ -8,6 +8,7 @@ import type {
   IncomingMessage,
   ServerResponse
 } from 'node:http'
+import type { ReadStream } from 'node:fs'
 import { Writable } from 'node:stream'
 import {
   mkdtemp,
@@ -15,8 +16,15 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { SrcSetCacheStorage } from '@srcset/core'
+import {
+  SrcSetCacheStorage,
+  getStoredPath
+} from '@srcset/core'
 import { createDevMiddleware } from './dev.ts'
+
+const key = 'a'.repeat(64)
+// Larger than the stream watermark, so the response cannot drain in one tick.
+const oversizedContents = 1024 * 1024
 
 async function createStorage() {
   const dir = await mkdtemp(path.join(tmpdir(), 'srcset-dev-'))
@@ -62,11 +70,11 @@ describe('vite-plugin', () => {
         const { storage } = await createStorage()
         const contents = Buffer.from('variant')
 
-        await storage.write('image.webp', contents)
+        await storage.write(getStoredPath(key, 'image.webp'), contents)
 
         const middleware = createDevMiddleware(storage)
         const request = {
-          url: '/@srcset/image.webp'
+          url: `/@srcset/${key}/image.webp`
         } as IncomingMessage
         const {
           response,
@@ -90,12 +98,12 @@ describe('vite-plugin', () => {
           storage
         } = await createStorage()
 
-        await storage.write('image.webp', Buffer.from('variant'))
-        await rm(path.join(dir, 'image.webp'))
+        await storage.write(getStoredPath(key, 'image.webp'), Buffer.from('variant'))
+        await rm(path.join(dir, getStoredPath(key, 'image.webp')))
 
         const middleware = createDevMiddleware(storage)
         const request = {
-          url: '/@srcset/image.webp'
+          url: `/@srcset/${key}/image.webp`
         } as IncomingMessage
         const {
           response,
@@ -115,11 +123,11 @@ describe('vite-plugin', () => {
         const { storage } = await createStorage()
         const contents = Buffer.from('variant')
 
-        await storage.write('image.webp', contents)
+        await storage.write(getStoredPath(key, 'image.webp'), contents)
 
         const middleware = createDevMiddleware(storage, '/assets/')
         const request = {
-          url: '/assets/@srcset/image.webp'
+          url: `/assets/@srcset/${key}/image.webp`
         } as IncomingMessage
         const {
           response,
@@ -139,11 +147,11 @@ describe('vite-plugin', () => {
         const { storage } = await createStorage()
         const contents = Buffer.from('variant')
 
-        await storage.write('image.webp', contents)
+        await storage.write(getStoredPath(key, 'image.webp'), contents)
 
         const middleware = createDevMiddleware(storage)
         const request = {
-          url: '/@srcset/image.webp?v=1'
+          url: `/@srcset/${key}/image.webp?v=1`
         } as IncomingMessage
         const {
           response,
@@ -159,6 +167,62 @@ describe('vite-plugin', () => {
         expect(body()).toEqual(contents)
       })
 
+      it('should destroy the stream when the request is aborted', async () => {
+        const { storage } = await createStorage()
+        const streams: ReadStream[] = []
+        const readStream = storage.readStream.bind(storage)
+
+        await storage.write(getStoredPath(key, 'image.webp'), Buffer.alloc(oversizedContents))
+
+        vi.spyOn(storage, 'readStream').mockImplementation((path: string) => {
+          const stream = readStream(path)
+
+          streams.push(stream)
+
+          return stream
+        })
+
+        const middleware = createDevMiddleware(storage)
+        const { response } = createResponse()
+
+        middleware({
+          url: `/@srcset/${key}/image.webp`
+        } as IncomingMessage, response, vi.fn())
+        response.destroy()
+
+        await new Promise<void>((resolve) => {
+          streams[0].on('close', () => {
+            resolve()
+          })
+        })
+
+        expect(streams[0].destroyed).toBe(true)
+      })
+
+      it('should serve same-named variants of different sources apart', async () => {
+        const { storage } = await createStorage()
+        const otherKey = 'b'.repeat(64)
+
+        await storage.write(getStoredPath(key, 'image.webp'), Buffer.from('first'))
+        await storage.write(getStoredPath(otherKey, 'image.webp'), Buffer.from('second'))
+
+        const middleware = createDevMiddleware(storage)
+        const first = createResponse()
+        const second = createResponse()
+
+        middleware({
+          url: `/@srcset/${key}/image.webp`
+        } as IncomingMessage, first.response, vi.fn())
+        middleware({
+          url: `/@srcset/${otherKey}/image.webp`
+        } as IncomingMessage, second.response, vi.fn())
+
+        await Promise.all([first.finished, second.finished])
+
+        expect(first.body()).toEqual(Buffer.from('first'))
+        expect(second.body()).toEqual(Buffer.from('second'))
+      })
+
       it('should pass foreign and unsafe urls to the next handler', async () => {
         const { storage } = await createStorage()
         const middleware = createDevMiddleware(storage)
@@ -171,16 +235,19 @@ describe('vite-plugin', () => {
           url: '/api?next=/@srcset/image.webp'
         } as IncomingMessage, createResponse().response, next)
         middleware({
-          url: '/@srcset/%'
+          url: `/@srcset/${key}/%`
         } as IncomingMessage, createResponse().response, next)
         middleware({
-          url: '/@srcset/..%2Fsecret.jpg'
+          url: `/@srcset/${key}/..%2Fsecret.jpg`
         } as IncomingMessage, createResponse().response, next)
         middleware({
-          url: '/@srcset/manifest.json'
+          url: `/@srcset/${key}/manifest.json`
+        } as IncomingMessage, createResponse().response, next)
+        middleware({
+          url: '/@srcset/image.webp'
         } as IncomingMessage, createResponse().response, next)
 
-        expect(next).toHaveBeenCalledTimes(5)
+        expect(next).toHaveBeenCalledTimes(6)
       })
     })
   })

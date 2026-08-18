@@ -58,15 +58,16 @@ export default defineConfig({
   plugins: [
     srcset({
       rules: [
+        // First format is the fallback: default export and src
         {
           match: '**/*.jpg',
           width: [1, 0.5],
-          format: ['avif', 'webp', 'jpg']
+          format: ['jpg', 'webp', 'avif']
         },
         {
           match: '**/*.gif',
           width: [1, 0.5],
-          format: ['webp', 'gif']
+          format: ['gif', 'webp']
         }
       ],
       placeholder: true

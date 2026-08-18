@@ -1,8 +1,3 @@
-import type {
-  Matcher,
-  GenerateOptions
-} from '@srcset/core'
-
 /**
  * Paths of an image emitted on the bundler side.
  */
@@ -21,19 +16,4 @@ export interface SrcSetImagePaths {
    * e.g. `__webpack_public_path__` of webpack.
    */
   publicPathExpression?: string
-}
-
-/**
- * Rule to generate image variants: match options plus generate options.
- */
-export interface SrcSetRule extends GenerateOptions {
-  /**
-   * Rule(s) to match the image: glob, media query or matcher function.
-   */
-  match?: Matcher | Matcher[]
-  /**
-   * Keep matching the rest of the rules after this rule matched.
-   * By default the first matched rule is the only one applied.
-   */
-  fallthrough?: boolean
 }
