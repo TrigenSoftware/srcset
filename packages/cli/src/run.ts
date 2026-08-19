@@ -12,10 +12,7 @@ import {
   resolve,
   sep
 } from 'node:path'
-import {
-  SrcSetGenerator,
-  matchImage
-} from '@srcset/core'
+import { SrcSetGenerator } from '@srcset/core'
 import { glob } from 'tinyglobby'
 import type { SrcSetCliOptions } from './types.ts'
 
@@ -49,33 +46,32 @@ export async function run(options: SrcSetCliOptions) {
 
   const generator = new SrcSetGenerator(generatorOptions)
   const written: string[] = []
+  const outputPaths = new Set<string>()
   const processFile = async (file: string) => {
     const source = {
       path: resolve(file),
       contents: await readFile(file)
     }
 
-    for (const rule of rules) {
-      if (!await matchImage(source, rule.match)) {
-        continue
+    for await (const image of generator.generateAll(source, rules)) {
+      const outputPath = toOutputPath(dest, image.path)
+
+      // Sources outside the cwd keep their file name only, so two of them
+      // can resolve to one output path - losing an image without a word
+      // is worse than stopping.
+      if (outputPaths.has(outputPath)) {
+        throw new Error(`Output path collision: "${outputPath}". Run from a directory containing every source, or process them separately.`)
       }
 
-      for await (const image of generator.generate(source, rule)) {
-        const outputPath = toOutputPath(dest, image.path)
+      outputPaths.add(outputPath)
+      await mkdir(dirname(outputPath), {
+        recursive: true
+      })
+      await writeFile(outputPath, image.contents)
+      written.push(outputPath)
 
-        await mkdir(dirname(outputPath), {
-          recursive: true
-        })
-        await writeFile(outputPath, image.contents)
-        written.push(outputPath)
-
-        if (verbose) {
-          console.info(`${file} -> ${outputPath}`)
-        }
-      }
-
-      if (!rule.fallthrough) {
-        break
+      if (verbose) {
+        console.info(`${file} -> ${outputPath}`)
       }
     }
   }

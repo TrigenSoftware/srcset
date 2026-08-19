@@ -7,6 +7,7 @@ import { getImageMetadata } from './metadata.ts'
 import {
   createImage,
   createAnimatedImage,
+  createOrientedImage,
   createSvg,
   fixtureWidth,
   fixtureHeight
@@ -49,6 +50,14 @@ describe('core', () => {
         expect(metadata.width).toBe(64)
         expect(metadata.height).toBe(64)
         expect(metadata.animated).toBe(true)
+      })
+
+      it('should report the size a browser renders for an oriented image', async () => {
+        const image = await createOrientedImage()
+        const metadata = await getImageMetadata(image)
+
+        expect(metadata.width).toBe(fixtureHeight)
+        expect(metadata.height).toBe(fixtureWidth)
       })
 
       it('should throw error on unsupported contents', async () => {

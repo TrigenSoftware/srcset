@@ -10,6 +10,7 @@ import {
 import {
   type SrcSetCacheStorage,
   type SrcSetImage,
+  getStoredPath,
   mimeTypes
 } from '@srcset/core'
 
@@ -19,14 +20,19 @@ export const devPathPrefix = '/@srcset/'
 const relativeDevPathPrefix = devPathPrefix.slice(1)
 
 /**
- * Make the dev server path of the variant, without the leading slash.
- * The name is encoded: browsers percent-encode special characters
- * in requests, the middleware matches the decoded form.
- * @param image - Image variant.
+ * Make the dev server path of the variant, without the leading slash:
+ * the manifest key addresses the stored file, the variant name keeps
+ * the url readable. The name is encoded: browsers percent-encode special
+ * characters in requests, the middleware matches the decoded form.
+ * @param image - Image variant, memoized in the cache storage.
  * @returns Dev server path of the variant.
  */
 export function getDevPath(image: SrcSetImage) {
-  return `${relativeDevPathPrefix}${encodeURIComponent(basename(image.path))}`
+  if (!image.cacheKey) {
+    throw new Error(`Image variant "${image.path}" is not stored in the cache storage.`)
+  }
+
+  return `${relativeDevPathPrefix}${image.cacheKey}/${encodeURIComponent(basename(image.path))}`
 }
 
 /**
@@ -40,7 +46,7 @@ export function createDevMiddleware(storage: SrcSetCacheStorage, base = '/') {
   const prefix = base + relativeDevPathPrefix
 
   return (request: IncomingMessage, response: ServerResponse, next: () => void) => {
-    let fileName: string
+    let storedPath: string
 
     // The prefix is matched on the pathname only: a prefix inside
     // a query string of a foreign route is not ours. Url parsing also
@@ -53,14 +59,23 @@ export function createDevMiddleware(storage: SrcSetCacheStorage, base = '/') {
         return
       }
 
-      fileName = decodeURIComponent(pathname.slice(prefix.length))
+      // The address is `<manifest key>/<variant name>`: the name alone
+      // is not unique across sources and options.
+      const [key, name, ...rest] = pathname.slice(prefix.length).split('/')
+
+      if (!key || !name || rest.length) {
+        next()
+        return
+      }
+
+      storedPath = getStoredPath(key, decodeURIComponent(name))
     } catch {
       // Invalid url or malformed percent-encoding: not ours.
       next()
       return
     }
 
-    const format = extname(fileName).slice(1) as keyof typeof mimeTypes
+    const format = extname(storedPath).slice(1) as keyof typeof mimeTypes
 
     // The middleware serves plain variant files only.
     if (!Object.hasOwn(mimeTypes, format)) {
@@ -71,7 +86,7 @@ export function createDevMiddleware(storage: SrcSetCacheStorage, base = '/') {
     let stream: ReadStream
 
     try {
-      stream = storage.readStream(fileName)
+      stream = storage.readStream(storedPath)
     } catch {
       // The storage rejects unsafe paths: not ours to serve.
       next()
@@ -82,6 +97,11 @@ export function createDevMiddleware(storage: SrcSetCacheStorage, base = '/') {
       // The storage was cleaned under a running server.
       response.statusCode = 404
       response.end()
+    })
+    // A client leaving mid-response would otherwise leak the file descriptor
+    // for the lifetime of the dev server.
+    response.on('close', () => {
+      stream.destroy()
     })
     response.setHeader('Content-Type', mimeTypes[format])
     response.setHeader('Cache-Control', 'no-cache')

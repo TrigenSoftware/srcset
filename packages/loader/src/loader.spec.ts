@@ -140,6 +140,21 @@ describe('loader', () => {
         expect(assets).toEqual(['image.jpg'])
       })
 
+      it('should keep the source extension of a converted image in development mode', async () => {
+        const dir = await createFixtureProject(defaultEntry)
+        const { assets } = await compile(createCompiler, dir, {
+          skipOptimization: true,
+          rules: [
+            {
+              width: [1],
+              format: ['webp']
+            }
+          ]
+        }, 'development')
+
+        expect(assets).toEqual(['image.jpg.webp'])
+      })
+
       it('should export placeholder data-url when enabled', async () => {
         const dir = await createFixtureProject(defaultEntry)
         const { exports } = await compile(createCompiler, dir, {

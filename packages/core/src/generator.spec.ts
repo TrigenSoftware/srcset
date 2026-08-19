@@ -20,8 +20,10 @@ import type {
 import {
   createImage,
   createAnimatedImage,
+  createOrientedImage,
   createSvg,
-  fixtureWidth
+  fixtureWidth,
+  fixtureHeight
 } from '../test/image.mock.ts'
 
 async function generateAll(generator: SrcSetGenerator, source: ImageSource, options?: GenerateOptions) {
@@ -207,15 +209,14 @@ describe('core', () => {
             skipOptimization: true
           })
           const image = await createImage('jpg')
-          const [w64, x2, x1, w320] = await generateAll(generator, image, {
+          const [w64, x1, xHalf] = await generateAll(generator, image, {
             scalingUp: false,
-            width: [64, 1, 0.5, 320]
+            width: [64, 1, 0.5]
           })
 
           expect(w64.originMultiplier).toBeNull()
-          expect(x2.originMultiplier).toBe(1)
-          expect(x1.originMultiplier).toBe(0.5)
-          expect(w320.originMultiplier).toBeNull()
+          expect(x1.originMultiplier).toBe(1)
+          expect(xHalf.originMultiplier).toBe(0.5)
         })
 
         it('should skip scaling up', async () => {
@@ -244,6 +245,52 @@ describe('core', () => {
           expect(images[1].width).toBe(fixtureWidth)
           expect(images[1].path).toBe(`/images/image@${fixtureWidth}w.jpg`)
           expect(images[1].postfix).toBe(`@${fixtureWidth}w`)
+        })
+
+        it('should keep a multiplier and an absolute width of the same target apart', async () => {
+          const generator = new SrcSetGenerator({
+            skipOptimization: true
+          })
+          const image = await createImage('jpg')
+          const images = await generateAll(generator, image, {
+            width: [1, fixtureWidth]
+          })
+
+          expect(images.map(({ path }) => path)).toEqual([
+            '/images/image.jpg',
+            `/images/image@${fixtureWidth}w.jpg`
+          ])
+        })
+
+        it('should keep the multiplier variant of a collision in either order', async () => {
+          const generator = new SrcSetGenerator({
+            skipOptimization: true
+          })
+          const image = await createImage('jpg')
+          const half = fixtureWidth / 2
+          const [before] = await generateAll(generator, image, {
+            width: [0.5, half]
+          })
+          const [after] = await generateAll(generator, image, {
+            width: [half, 0.5]
+          })
+
+          expect(before.originMultiplier).toBe(0.5)
+          expect(after.originMultiplier).toBe(0.5)
+          expect(after.path).toBe(before.path)
+        })
+
+        it('should deduplicate widths resolving to the same target', async () => {
+          const generator = new SrcSetGenerator({
+            skipOptimization: true
+          })
+          const image = await createImage('jpg')
+          const images = await generateAll(generator, image, {
+            width: [1920, 1280, fixtureWidth]
+          })
+
+          expect(images.length).toBe(1)
+          expect(images[0].width).toBe(fixtureWidth)
         })
 
         it('should deduplicate identical variants', async () => {
@@ -492,6 +539,125 @@ describe('core', () => {
           const files = (await readdir(dir)).filter(name => !name.endsWith('.json'))
 
           expect(files.length).toBe(4)
+        })
+      })
+
+      describe('orientation', () => {
+        it('should rotate the pixels of an oriented source', async () => {
+          const generator = new SrcSetGenerator()
+          const image = await createOrientedImage()
+          const [variant] = await generateAll(generator, image, {
+            width: [0.5]
+          })
+          const metadata = await sharp(variant.contents).metadata()
+
+          expect(variant.width).toBe(fixtureHeight / 2)
+          expect(variant.height).toBe(fixtureWidth / 2)
+          expect(metadata.width).toBe(fixtureHeight / 2)
+          expect(metadata.height).toBe(fixtureWidth / 2)
+          expect(metadata.orientation).toBeUndefined()
+        })
+
+        it('should keep every variant of an oriented source in one orientation', async () => {
+          const generator = new SrcSetGenerator({
+            skipOptimization: true
+          })
+          const image = await createOrientedImage()
+          const images = await generateAll(generator, image, {
+            width: [1, 0.5]
+          })
+          const rendered = await Promise.all(images.map(async ({ contents }) => {
+            const {
+              width,
+              height,
+              orientation
+            } = await sharp(contents).metadata()
+
+            // A browser applies the tag: transposed for orientation 6.
+            return orientation === 6 ? width < height : width > height
+          }))
+
+          expect(images.length).toBe(2)
+          expect(rendered).toEqual([false, false])
+          expect(images.map(({ width }) => width)).toEqual([fixtureHeight, fixtureHeight / 2])
+        })
+      })
+
+      describe('generateAll', () => {
+        it('should apply the first matching rule only', async () => {
+          const generator = new SrcSetGenerator({
+            skipOptimization: true
+          })
+          const image = await createImage('jpg')
+          const images = []
+
+          for await (const generated of generator.generateAll(image, [
+            {
+              match: '**/*.png',
+              width: [0.25]
+            },
+            {
+              width: [0.5]
+            },
+            {
+              width: [0.75]
+            }
+          ])) {
+            images.push(generated)
+          }
+
+          expect(images.map(({ path }) => path)).toEqual(['/images/image@320w.jpg'])
+        })
+
+        it('should keep matching after a fallthrough rule', async () => {
+          const generator = new SrcSetGenerator({
+            skipOptimization: true
+          })
+          const image = await createImage('jpg')
+          const images = []
+
+          for await (const generated of generator.generateAll(image, [
+            {
+              fallthrough: true,
+              width: [0.5]
+            },
+            {
+              width: [0.25]
+            }
+          ])) {
+            images.push(generated)
+          }
+
+          expect(images.map(({ path }) => path)).toEqual([
+            '/images/image@320w.jpg',
+            '/images/image@160w.jpg'
+          ])
+        })
+
+        it('should produce a file of overlapping rules once', async () => {
+          const generator = new SrcSetGenerator({
+            skipOptimization: true
+          })
+          const image = await createImage('jpg')
+          const images = []
+
+          for await (const generated of generator.generateAll(image, [
+            {
+              fallthrough: true,
+              width: [0.5, 1]
+            },
+            {
+              width: [320, 0.25]
+            }
+          ])) {
+            images.push(generated)
+          }
+
+          expect(images.map(({ path }) => path)).toEqual([
+            '/images/image@320w.jpg',
+            '/images/image.jpg',
+            '/images/image@160w.jpg'
+          ])
         })
       })
     })

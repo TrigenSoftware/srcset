@@ -7,6 +7,7 @@ import type {
 } from 'sharp'
 import type { LimitFunction } from 'p-limit'
 import type { ImageFormat } from './formats.ts'
+import type { Matcher } from './match.ts'
 import type { SrcSetCacheStorage } from './cache.ts'
 
 /**
@@ -77,6 +78,12 @@ export interface SrcSetImage {
    * Width multiplier relative to the original image, if the variant was requested with one.
    */
   originMultiplier: number | null
+  /**
+   * Manifest key of the variant, set when it went through the cache storage.
+   * Addresses the stored file, which the variant file name alone does not:
+   * names are not unique across sources and options.
+   */
+  cacheKey?: string
 }
 
 /**
@@ -174,6 +181,21 @@ export interface GenerateOptions extends Omit<SrcSetGeneratorOptions, 'concurren
    * Output image width(s) to resize. Value less than or equal to 1 is treated as a multiplier.
    */
   width?: number | number[]
+}
+
+/**
+ * Rule to generate image variants: match options plus generate options.
+ */
+export interface SrcSetRule extends GenerateOptions {
+  /**
+   * Rule(s) to match the image: glob, media query or matcher function.
+   */
+  match?: Matcher | Matcher[]
+  /**
+   * Keep matching the rest of the rules after this rule matched.
+   * By default the first matched rule is the only one applied.
+   */
+  fallthrough?: boolean
 }
 
 /**

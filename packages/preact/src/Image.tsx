@@ -15,7 +15,7 @@ import {
 
 function applyRef<T>(ref: Ref<T> | undefined, node: T | null) {
   if (typeof ref === 'function') {
-    // Preact 10.23+ callback refs may return a cleanup function: pass it through.
+    // Preact 10.27+ callback refs may return a cleanup function: pass it through.
     return ref(node)
   }
 

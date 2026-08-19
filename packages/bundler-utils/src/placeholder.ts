@@ -77,7 +77,9 @@ export async function createPlaceholder(
 
   const createImage = async (): Promise<SrcSetImage> => {
     const contents = await limit(() => {
-      const pipeline = sharp(source.contents).resize({
+      const pipeline = sharp(source.contents, {
+        autoOrient: true
+      }).resize({
         width,
         withoutEnlargement: true
       })

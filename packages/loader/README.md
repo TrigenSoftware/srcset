@@ -60,9 +60,10 @@ export default {
           loader: '@srcset/loader',
           options: {
             rules: [
+              // First format is the fallback: default export and src
               {
                 width: [1, 0.5],
-                format: ['avif', 'webp', 'jpg']
+                format: ['jpg', 'webp', 'avif']
               }
             ],
             placeholder: true

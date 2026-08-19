@@ -2,6 +2,7 @@ import { match as matchMediaQuery } from 'css-mediaquery'
 import picomatch from 'picomatch'
 import type { ImageSource } from './types.ts'
 import { getImageMetadata } from './metadata.ts'
+import { toPosixPath } from './path.ts'
 
 /**
  * Image size in pixels.
@@ -59,6 +60,9 @@ export async function matchImage(source: ImageSource, matcher?: Matcher | Matche
   }
 
   const matchers = Array.isArray(matcher) ? matcher : [matcher]
+  // One glob matches on every platform: the loader and the cli
+  // feed native paths, vite feeds posix ones.
+  const path = toPosixPath(source.path)
 
   return matchers.every((matcherToApply) => {
     if (typeof matcherToApply === 'string') {
@@ -66,7 +70,7 @@ export async function matchImage(source: ImageSource, matcher?: Matcher | Matche
         return matchMediaQuery(matcherToApply, size)
       }
 
-      return picomatch(matcherToApply)(source.path)
+      return picomatch(matcherToApply)(path)
     }
 
     if (typeof matcherToApply === 'function') {

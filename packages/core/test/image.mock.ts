@@ -75,6 +75,32 @@ export async function createImage(
 }
 
 /**
+ * Create a jpeg fixture stored rotated, with an EXIF orientation tag:
+ * the stored pixels are landscape, a browser renders them portrait.
+ * @param width - Stored image width.
+ * @param height - Stored image height.
+ * @returns Image file.
+ */
+export async function createOrientedImage(
+  width = fixtureWidth,
+  height = fixtureHeight
+): Promise<ImageSource> {
+  const contents = await createNoisePipeline(width, height)
+    .withMetadata({
+      orientation: 6
+    })
+    .jpeg({
+      quality: 90
+    })
+    .toBuffer()
+
+  return {
+    path: '/images/oriented.jpg',
+    contents
+  }
+}
+
+/**
  * Create an animated gif fixture in memory.
  * @param width - Frame width.
  * @param height - Frame height.

@@ -3,7 +3,6 @@ import {
   type ImageSource,
   SrcSetGenerator,
   getImageMetadata,
-  matchImage,
   mimeTypes
 } from '@srcset/core'
 import type { QueryOptions } from './query.ts'
@@ -45,41 +44,46 @@ export async function generateSrcSetModule(
     limit
   })
   const metadata = await getImageMetadata(source)
+  // The query flag only switches the placeholder on and off: the configured
+  // options stay, so `?placeholder` does not fall back to the defaults.
+  const placeholderOptions = query.placeholder === undefined
+    ? options.placeholder
+    : query.placeholder && (options.placeholder ?? true)
   const placeholder = await createPlaceholder(
     source,
     metadata,
-    query.placeholder ?? options.placeholder,
+    placeholderOptions,
     limit,
     options.cache
   )
-  const select = {
-    format: metadata.format,
-    width: metadata.width,
+  const userSelect = {
     ...options.select,
     ...query.select
   }
+  const hasUserSelect = userSelect.id !== undefined
+    || userSelect.format !== undefined
+    || userSelect.width !== undefined
+  // The implicit selection describes the original image and applies only when
+  // nothing is selected explicitly: mixed into a partial selection it would
+  // defeat the half the user did not specify.
+  const select = hasUserSelect
+    ? userSelect
+    : {
+      format: metadata.format,
+      width: metadata.width
+    }
   const srcSet: SrcSetModuleEntry[] = []
 
-  for (const rule of rules) {
-    if (!await matchImage(source, rule.match)) {
-      continue
-    }
-
-    for await (const image of generator.generate(source, rule)) {
-      srcSet.push({
-        id: resourceId(image.width, image.originMultiplier ?? image.width, image.format),
-        format: image.format,
-        type: mimeTypes[image.format],
-        width: image.width,
-        height: image.height,
-        originMultiplier: image.originMultiplier,
-        url: emitImage(image)
-      })
-    }
-
-    if (!rule.fallthrough) {
-      break
-    }
+  for await (const image of generator.generateAll(source, rules)) {
+    srcSet.push({
+      id: resourceId(image.width, image.originMultiplier ?? image.width, image.format),
+      format: image.format,
+      type: mimeTypes[image.format],
+      width: image.width,
+      height: image.height,
+      originMultiplier: image.originMultiplier,
+      url: emitImage(image)
+    })
   }
 
   return createModuleString(select, srcSet, placeholder)
