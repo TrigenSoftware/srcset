@@ -1,0 +1,21 @@
+{
+  "name": "@srcset/rspack-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rspack serve --mode development",
+    "build": "rspack build --mode production"
+  },
+  "dependencies": {
+    "@srcset/react": "*",
+    "@srcset/runtime": "*"
+  },
+  "devDependencies": {
+    "@rspack/cli": "^2.1.0",
+    "@rspack/core": "^2.1.4",
+    "@rspack/dev-server": "^2.2.0",
+    "@srcset/loader": "*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}

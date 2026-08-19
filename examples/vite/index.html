@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>srcset + Vite</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, sans-serif;
+    }
+
+    body {
+      margin: 0 auto;
+      padding: 2rem 1rem 4rem;
+      max-width: 48rem;
+      color: #1b1b1f;
+      background: #fff;
+      line-height: 1.5;
+    }
+
+    h1 {
+      margin-bottom: .25rem;
+    }
+
+    .intro {
+      margin-top: 0;
+      color: #55555f;
+    }
+
+    .demo {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #e3e3e8;
+    }
+
+    .demo h2 {
+      margin: 0 0 .75rem;
+      font-size: 1.1rem;
+    }
+
+    .demo picture {
+      display: block;
+    }
+
+    .demo img {
+      display: block;
+      margin-inline: auto;
+      max-width: 100%;
+      height: auto;
+      border-radius: .5rem;
+    }
+
+    .caption {
+      margin: .75rem 0 0;
+      color: #55555f;
+      font-size: .9rem;
+    }
+
+    .variants {
+      margin: .5rem 0 0;
+      padding: .5rem .75rem;
+      border-radius: .5rem;
+      background: #f4f4f7;
+      color: #3c3c45;
+      font-family: ui-monospace, monospace;
+      font-size: .75rem;
+      line-height: 1.6;
+      overflow-x: auto;
+    }
+
+    .variants li {
+      white-space: nowrap;
+      list-style: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>srcset + Vite</h1>
+  <p class="intro">
+    Four image imports processed by <code>@srcset/vite-plugin</code> and rendered with the
+    <code>Picture</code> and <code>Image</code> components of <code>@srcset/svelte</code>:
+    responsive widths and modern formats, a blur-up placeholder, transparency and animation
+    kept intact.
+  </p>
+  <main id="app"></main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

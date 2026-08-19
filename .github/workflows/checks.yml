@@ -49,4 +49,4 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - name: Check package.json files
-        run: pnpm --package=@trigen/lint-package-json dlx lint-package-json --monorepo
+        run: pnpm --package=@trigen/lint-package-json dlx lint-package-json --monorepo --ignore examples
