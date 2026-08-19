@@ -49,7 +49,13 @@ export interface SrcSetLoaderContext {
   async(): (error?: Error | null, content?: string | Buffer) => void
 }
 
-export interface SrcSetLoaderOptions extends SrcSetModuleOptions {
+export interface SrcSetLoaderOptions extends Omit<SrcSetModuleOptions, 'cache'> {
+  /**
+   * Cache generated variants on disk, in `node_modules/.cache/srcset`:
+   * repeated builds skip the generation. Disabled by default - the
+   * persistent cache of the bundler covers it, when it is enabled.
+   */
+  cache?: boolean
   /**
    * Output file name template.
    * Supports `[name]`, `[postfix]`, `[ext]`, `[path]`, `[sourceext]` and
