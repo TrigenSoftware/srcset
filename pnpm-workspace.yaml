@@ -1,8 +1,18 @@
 packages:
   - packages/*
+  - examples/*
   - website
 autoInstallPeers: false
+overrides:
+  '@srcset/core@*': workspace:^
+  '@srcset/loader@*': workspace:^
+  '@srcset/preact@*': workspace:^
+  '@srcset/react@*': workspace:^
+  '@srcset/runtime@*': workspace:^
+  '@srcset/svelte@*': workspace:^
+  '@srcset/vite-plugin@*': workspace:^
 allowBuilds:
+  '@swc/core': true
   esbuild: true
   sharp: true
   simple-git-hooks: true
