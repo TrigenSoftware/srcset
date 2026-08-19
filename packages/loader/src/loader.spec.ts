@@ -1,7 +1,8 @@
 import {
   describe,
   it,
-  expect
+  expect,
+  vi
 } from 'vitest'
 import sharp from 'sharp'
 import webpack from 'webpack'
@@ -153,6 +154,48 @@ describe('loader', () => {
         }, 'development')
 
         expect(assets).toEqual(['image.jpg.webp'])
+      })
+
+      it('should reuse the disk cache across builds when enabled', async () => {
+        const dir = await createFixtureProject(defaultEntry)
+        const optimize = vi.fn((contents: Buffer) => contents)
+        const options = {
+          cache: true,
+          optimization: {
+            jpg: optimize
+          }
+        }
+
+        await compile(createCompiler, dir, options)
+
+        const generatedCalls = optimize.mock.calls.length
+
+        expect(generatedCalls).toBeGreaterThan(0)
+
+        const { assets } = await compile(createCompiler, dir, options)
+
+        expect(optimize.mock.calls.length).toBe(generatedCalls)
+        expect(assets.length).toBeGreaterThan(0)
+      })
+
+      it('should regenerate without the cache option', async () => {
+        const dir = await createFixtureProject(defaultEntry)
+        const optimize = vi.fn((contents: Buffer) => contents)
+        const options = {
+          optimization: {
+            jpg: optimize
+          }
+        }
+
+        await compile(createCompiler, dir, options)
+
+        const generatedCalls = optimize.mock.calls.length
+
+        expect(generatedCalls).toBeGreaterThan(0)
+
+        await compile(createCompiler, dir, options)
+
+        expect(optimize.mock.calls.length).toBe(generatedCalls * 2)
       })
 
       it('should export placeholder data-url when enabled', async () => {

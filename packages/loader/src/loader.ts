@@ -14,17 +14,19 @@ import {
   resolvePublicPath
 } from './paths.ts'
 import { getSharedLimit } from './limit.ts'
+import { getSharedCache } from './cache.ts'
 
 async function generateModule(ctx: SrcSetLoaderContext, contents: Buffer) {
-  const options = ctx.getOptions()
   const {
     context = ctx.rootContext,
     emitFile = true,
     name = getDefaultName(ctx.mode),
+    cache = false,
     concurrency,
     outputPath,
-    publicPath
-  } = options
+    publicPath,
+    ...moduleOptions
+  } = ctx.getOptions()
   const source = {
     path: ctx.resourcePath,
     contents
@@ -56,7 +58,10 @@ async function generateModule(ctx: SrcSetLoaderContext, contents: Buffer) {
   return generateSrcSetModule(
     source,
     query,
-    options,
+    {
+      ...moduleOptions,
+      cache: cache ? getSharedCache(ctx.rootContext) : undefined
+    },
     emitImage,
     limit
   )
