@@ -31,7 +31,9 @@ async function createStorage() {
 
   return {
     dir,
-    storage: new SrcSetCacheStorage(dir)
+    storage: new SrcSetCacheStorage({
+      dir
+    })
   }
 }
 

@@ -518,7 +518,9 @@ describe('core', () => {
       describe('cache', () => {
         it('should reuse stored variants between generators', async () => {
           const dir = await mkdtemp(path.join(tmpdir(), 'srcset-generator-cache-'))
-          const cache = new SrcSetCacheStorage(dir)
+          const cache = new SrcSetCacheStorage({
+            dir
+          })
           const image = await createImage('jpg')
           const options: GenerateOptions = {
             width: [1, 0.5],

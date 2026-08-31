@@ -6,7 +6,9 @@ import {
 } from 'vitest'
 import {
   mkdir,
-  copyFile
+  copyFile,
+  readdir,
+  writeFile
 } from 'node:fs/promises'
 import path from 'node:path'
 import sharp from 'sharp'
@@ -149,6 +151,43 @@ export default logo
         expect(second.exports.srcSet.length).toBe(4)
         expect(second.exports.default).toBe(first.exports.default)
         expect(second.assets.length).toBe(first.assets.length)
+      })
+
+      it('should cache in the configured directory', async () => {
+        const dir = await createFixtureProject(defaultEntry)
+        const cacheDir = path.join(dir, 'custom-cache')
+
+        await buildFixture(dir, {
+          cache: {
+            dir: cacheDir
+          }
+        })
+
+        expect((await readdir(cacheDir)).length).toBeGreaterThan(0)
+      })
+
+      it('should prune the cache when the build is over', async () => {
+        const dir = await createFixtureProject(defaultEntry)
+        const cacheDir = path.join(dir, 'custom-cache')
+        const key = 'a'.repeat(64)
+
+        await mkdir(cacheDir, {
+          recursive: true
+        })
+        await writeFile(path.join(cacheDir, `${key}.json`), JSON.stringify({
+          usedAt: Date.now() - 31 * 24 * 60 * 60 * 1000
+        }))
+        await writeFile(path.join(cacheDir, `${key}-stale.webp`), 'stale')
+        await buildFixture(dir, {
+          cache: {
+            dir: cacheDir
+          }
+        })
+
+        const left = await readdir(cacheDir)
+
+        expect(left.some(name => name.startsWith(key))).toBe(false)
+        expect(left.length).toBeGreaterThan(0)
       })
 
       it('should regenerate with the cache disabled', async () => {

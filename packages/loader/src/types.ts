@@ -1,4 +1,7 @@
-import type { SrcSetModuleOptions } from '@srcset/bundler-utils'
+import type {
+  SrcSetCacheOptions,
+  SrcSetModuleOptions
+} from '@srcset/bundler-utils'
 
 /**
  * Path resolver function.
@@ -8,6 +11,17 @@ import type { SrcSetModuleOptions } from '@srcset/bundler-utils'
  * @returns Resolved path.
  */
 export type PathResolver = (url: string, resourcePath: string, context: string) => string
+
+/**
+ * The part of the compiler the loader uses to prune the cache.
+ */
+export interface SrcSetLoaderCompiler {
+  hooks: {
+    done: {
+      tapPromise(name: string, handler: () => Promise<void>): void
+    }
+  }
+}
 
 /**
  * The part of the webpack and rspack loader context the loader uses.
@@ -32,6 +46,11 @@ export interface SrcSetLoaderContext {
    */
   mode: string | undefined
   /**
+   * Compiler of the run, to prune the cache when it is done.
+   */
+  /* oxlint-disable-next-line trigen/naming-convention -- the name is the compilers' own */
+  _compiler: SrcSetLoaderCompiler
+  /**
    * Read the loader options.
    * @returns Loader options.
    */
@@ -54,8 +73,9 @@ export interface SrcSetLoaderOptions extends Omit<SrcSetModuleOptions, 'cache'> 
    * Cache generated variants on disk, in `node_modules/.cache/srcset`:
    * repeated builds skip the generation. Disabled by default - the
    * persistent cache of the bundler covers it, when it is enabled.
+   * Takes a `dir` and a `maxAge` to configure the storage.
    */
-  cache?: boolean
+  cache?: boolean | SrcSetCacheOptions
   /**
    * Output file name template.
    * Supports `[name]`, `[postfix]`, `[ext]`, `[path]`, `[sourceext]` and
