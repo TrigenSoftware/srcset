@@ -4,7 +4,10 @@ import {
   parseResourceQuery,
   generateSrcSetModule
 } from '@srcset/bundler-utils'
-import type { SrcSetLoaderContext } from './types.ts'
+import type {
+  SrcSetLoaderCompiler,
+  SrcSetLoaderContext
+} from './types.ts'
 import {
   interpolateName,
   getDefaultName
@@ -15,6 +18,23 @@ import {
 } from './paths.ts'
 import { getSharedLimit } from './limit.ts'
 import { getSharedCache } from './cache.ts'
+
+const tapped = new WeakSet<SrcSetLoaderCompiler>()
+
+/**
+ * Tap the end of the compilation once per compiler: the loader runs
+ * for every module, so tapping on each run would pile up the handlers.
+ * @param compiler - Compiler of the loader run.
+ * @param handler - Handler to run when the compilation is done.
+ */
+function tapOnce(compiler: SrcSetLoaderCompiler, handler: () => Promise<void>) {
+  if (tapped.has(compiler)) {
+    return
+  }
+
+  tapped.add(compiler)
+  compiler.hooks.done.tapPromise('srcset', handler)
+}
 
 async function generateModule(ctx: SrcSetLoaderContext, contents: Buffer) {
   const {
@@ -33,6 +53,14 @@ async function generateModule(ctx: SrcSetLoaderContext, contents: Buffer) {
   }
   const query = parseResourceQuery(ctx.resourceQuery)
   const limit = getSharedLimit(concurrency)
+  const storage = cache ? getSharedCache(ctx.rootContext, cache) : undefined
+
+  if (storage) {
+    // Pruning before the build would drop the entries it is about to hit,
+    // whose marks it has not refreshed yet.
+    tapOnce(ctx._compiler, () => storage.prune())
+  }
+
   const emitImage = (image: SrcSetImage) => {
     const url = interpolateName(name, {
       contents: image.contents,
@@ -60,7 +88,7 @@ async function generateModule(ctx: SrcSetLoaderContext, contents: Buffer) {
     query,
     {
       ...moduleOptions,
-      cache: cache ? getSharedCache(ctx.rootContext) : undefined
+      cache: storage
     },
     emitImage,
     limit

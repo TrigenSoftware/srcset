@@ -7,7 +7,10 @@ import {
 import {
   mkdtemp,
   readdir,
-  rm
+  readFile,
+  rm,
+  utimes,
+  writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -49,12 +52,32 @@ function createImage(): SrcSetImage {
   }
 }
 
+const dayMs = 24 * 60 * 60 * 1000
+
+async function getUsedAt(dir: string, key: string) {
+  const manifest = await readFile(path.join(dir, `${key}.json`), 'utf8')
+
+  return (JSON.parse(manifest) as { usedAt: number }).usedAt
+}
+
+async function setUsedAt(dir: string, key: string, usedAt: number) {
+  const manifestPath = path.join(dir, `${key}.json`)
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
+
+  await writeFile(manifestPath, JSON.stringify({
+    ...manifest,
+    usedAt
+  }))
+}
+
 async function createStorage() {
   const dir = await mkdtemp(path.join(tmpdir(), 'srcset-storage-'))
 
   return {
     dir,
-    storage: new SrcSetCacheStorage(dir)
+    storage: new SrcSetCacheStorage({
+      dir
+    })
   }
 }
 
@@ -83,7 +106,9 @@ describe('core', () => {
             cacheKey: key
           })
 
-          const cached = await new SrcSetCacheStorage(dir).memo(context, variant, fn)
+          const cached = await new SrcSetCacheStorage({
+            dir
+          }).memo(context, variant, fn)
 
           expect(fn).toHaveBeenCalledTimes(1)
           expect(cached).toEqual({
@@ -186,6 +211,171 @@ describe('core', () => {
             ...createImage(),
             cacheKey: storage.getKey(context, variant).key
           })
+        })
+      })
+
+      describe('prune', () => {
+        it('should remove entries unused longer than the max age', async () => {
+          const {
+            dir,
+            storage
+          } = await createStorage()
+          const context = createContext()
+          const variant = {
+            format: 'webp' as const,
+            width: 0.5
+          }
+
+          await storage.memo(context, variant, () => Promise.resolve(createImage()))
+
+          const { key } = storage.getKey(context, variant)
+
+          await setUsedAt(dir, key, Date.now() - 31 * dayMs)
+          await new SrcSetCacheStorage({
+            dir
+          }).prune()
+
+          expect(await readdir(dir)).toEqual([])
+        })
+
+        it('should keep entries used within the max age', async () => {
+          const {
+            dir,
+            storage
+          } = await createStorage()
+          const context = createContext()
+          const variant = {
+            format: 'webp' as const,
+            width: 0.5
+          }
+
+          await storage.memo(context, variant, () => Promise.resolve(createImage()))
+          await new SrcSetCacheStorage({
+            dir
+          }).prune()
+
+          expect((await readdir(dir)).length).toBe(2)
+        })
+
+        it('should respect a custom max age', async () => {
+          const {
+            dir,
+            storage
+          } = await createStorage()
+          const context = createContext()
+          const variant = {
+            format: 'webp' as const,
+            width: 0.5
+          }
+
+          await storage.memo(context, variant, () => Promise.resolve(createImage()))
+
+          const { key } = storage.getKey(context, variant)
+
+          await setUsedAt(dir, key, Date.now() - 2 * dayMs)
+          await new SrcSetCacheStorage({
+            dir,
+            maxAge: dayMs
+          }).prune()
+
+          expect(await readdir(dir)).toEqual([])
+        })
+
+        it('should keep a file left without its manifest within the grace period', async () => {
+          const {
+            dir,
+            storage
+          } = await createStorage()
+          const path = `${'a'.repeat(64)}-image.webp`
+
+          await storage.write(path, Buffer.from('half-written'))
+          await new SrcSetCacheStorage({
+            dir
+          }).prune()
+
+          expect(await readdir(dir)).toEqual([path])
+        })
+
+        it('should remove a file left without its manifest after the grace period', async () => {
+          const {
+            dir,
+            storage
+          } = await createStorage()
+          const name = `${'a'.repeat(64)}-image.webp`
+          const stale = new Date(Date.now() - 10 * 60 * 1000)
+
+          await storage.write(name, Buffer.from('crash leftover'))
+          await utimes(path.join(dir, name), stale, stale)
+          await new SrcSetCacheStorage({
+            dir
+          }).prune()
+
+          expect(await readdir(dir)).toEqual([])
+        })
+
+        it('should remove an entry with a manifest of an older version', async () => {
+          const {
+            dir,
+            storage
+          } = await createStorage()
+          const context = createContext()
+          const variant = {
+            format: 'webp' as const,
+            width: 0.5
+          }
+
+          await storage.memo(context, variant, () => Promise.resolve(createImage()))
+
+          const { key } = storage.getKey(context, variant)
+          const manifestPath = path.join(dir, `${key}.json`)
+          const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
+
+          delete manifest.usedAt
+
+          await writeFile(manifestPath, JSON.stringify(manifest))
+          await new SrcSetCacheStorage({
+            dir
+          }).prune()
+
+          expect(await readdir(dir)).toEqual([])
+        })
+
+        it('should keep files of other tools in the directory', async () => {
+          const { dir } = await createStorage()
+
+          await writeFile(path.join(dir, 'notes.txt'), 'not ours')
+          await writeFile(path.join(dir, '.other-tool-cache'), 'not ours either')
+          await new SrcSetCacheStorage({
+            dir
+          }).prune()
+
+          expect((await readdir(dir)).sort()).toEqual(['.other-tool-cache', 'notes.txt'])
+        })
+
+        it('should refresh the used-at mark of a hit entry', async () => {
+          const {
+            dir,
+            storage
+          } = await createStorage()
+          const context = createContext()
+          const variant = {
+            format: 'webp' as const,
+            width: 0.5
+          }
+          const fn = vi.fn(() => Promise.resolve(createImage()))
+
+          await storage.memo(context, variant, fn)
+
+          const { key } = storage.getKey(context, variant)
+          const staleUsedAt = Date.now() - 20 * dayMs
+
+          await setUsedAt(dir, key, staleUsedAt)
+          await new SrcSetCacheStorage({
+            dir
+          }).memo(context, variant, fn)
+
+          expect(fn).toHaveBeenCalledTimes(1)
+          expect(await getUsedAt(dir, key)).toBeGreaterThan(staleUsedAt)
         })
       })
 

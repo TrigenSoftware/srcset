@@ -1,16 +1,20 @@
+import { availableParallelism } from 'node:os'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import {
   mkdir,
+  readdir,
   readFile,
   rename,
   rm,
+  stat,
   writeFile
 } from 'node:fs/promises'
 import {
   join,
   parse
 } from 'node:path'
+import pLimit from 'p-limit'
 import type { ImageFormat } from './formats.ts'
 import type {
   GenerateContext,
@@ -30,6 +34,21 @@ import {
 import { environment } from './cache.version.ts'
 
 const storedPathSeparator = '-'
+const manifestExtension = '.json'
+const keyLength = 64
+/* oxlint-disable no-magic-numbers -- a duration reads better than named parts */
+const day = 24 * 60 * 60 * 1000
+const defaultMaxAge = 30 * day
+/* oxlint-enable no-magic-numbers */
+// The used-at mark is rewritten at most once per this part of the max age:
+// a mark is only needed to tell a used entry from an abandoned one.
+const usedAtPrecision = 10
+// A file without a readable manifest is either a leftover of a crash or
+// a half-written entry of a build running right now: the grace period tells
+// them apart without a lock.
+/* oxlint-disable-next-line no-magic-numbers -- a duration reads better than named parts */
+const orphanGrace = 5 * 60 * 1000
+const keyPattern = /^[\da-f]{64}$/
 
 /**
  * Make the stored file path of a variant: the storage is flat, so the
@@ -41,6 +60,30 @@ const storedPathSeparator = '-'
  */
 export function getStoredPath(key: string, name: string) {
   return `${key}${storedPathSeparator}${name}`
+}
+
+/**
+ * Make the manifest path of an entry.
+ * @param key - Manifest key of the variant.
+ * @returns Manifest file path.
+ */
+function getManifestPath(key: string) {
+  return `${key}${manifestExtension}`
+}
+
+/**
+ * Get the manifest key a stored file belongs to. Anything that does not
+ * look like an entry of this storage belongs to no key: the directory
+ * is configurable, and files of other tools are not ours to remove.
+ * @param path - Stored file name.
+ * @returns Manifest key, or `null` for a foreign file.
+ */
+function getEntryKey(path: string) {
+  const key = path.endsWith(manifestExtension)
+    ? path.slice(0, -manifestExtension.length)
+    : path.slice(0, keyLength)
+
+  return keyPattern.test(key) ? key : null
 }
 
 /**
@@ -57,8 +100,24 @@ export interface CacheAddress {
   path: string
 }
 
+/**
+ * Options of the cache storage.
+ */
+export interface SrcSetCacheStorageOptions {
+  /**
+   * Directory to store the variants and their manifests in.
+   */
+  dir: string
+  /**
+   * Maximum age of an unused entry in milliseconds. Defaults to 30 days.
+   * Entries older than that are removed when the storage is first used.
+   */
+  maxAge?: number
+}
+
 interface CacheEntry {
   path: string
+  usedAt: number
   hash: string
   format: ImageFormat
   width: number
@@ -80,9 +139,12 @@ interface CacheEntry {
  */
 export class SrcSetCacheStorage {
   private readonly dir: string
+  private readonly maxAge: number
+  private pruning?: Promise<void>
 
-  constructor(dir: string) {
-    this.dir = dir
+  constructor(options: SrcSetCacheStorageOptions) {
+    this.dir = options.dir
+    this.maxAge = options.maxAge ?? defaultMaxAge
   }
 
   /**
@@ -124,7 +186,7 @@ export class SrcSetCacheStorage {
   private async readEntry(address: CacheAddress): Promise<SrcSetImage | null> {
     try {
       const [entry, contents] = await Promise.all([
-        this.read(`${address.key}.json`, 'utf8')
+        this.read(getManifestPath(address.key), 'utf8')
           .then(manifest => JSON.parse(manifest) as CacheEntry),
         this.read(address.path)
       ])
@@ -134,6 +196,8 @@ export class SrcSetCacheStorage {
       if (entry.hash !== getContentsHash(contents)) {
         return null
       }
+
+      await this.markUsed(address.key, entry)
 
       return {
         path: entry.path,
@@ -151,9 +215,33 @@ export class SrcSetCacheStorage {
     }
   }
 
+  /**
+   * Keep the used-at mark of a hit entry fresh, so pruning tells
+   * an entry still in use from an abandoned one. The mark lives in the
+   * manifest rather than in the file mtime: archives do not always
+   * carry timestamps, contents always survive.
+   * @param key - Manifest key of the entry.
+   * @param entry - Manifest of the entry.
+   */
+  private async markUsed(key: string, entry: CacheEntry) {
+    const now = Date.now()
+
+    if (now - entry.usedAt < this.maxAge / usedAtPrecision) {
+      return
+    }
+
+    try {
+      await this.write(getManifestPath(key), JSON.stringify({
+        ...entry,
+        usedAt: now
+      }))
+    } catch {}
+  }
+
   private async writeEntry(address: CacheAddress, image: SrcSetImage) {
     const entry: CacheEntry = {
       path: image.path,
+      usedAt: Date.now(),
       hash: getContentsHash(image.contents),
       format: image.format,
       width: image.width,
@@ -166,7 +254,7 @@ export class SrcSetCacheStorage {
     // its file is a read miss with regeneration.
     await Promise.all([
       this.write(address.path, image.contents),
-      this.write(`${address.key}.json`, JSON.stringify(entry))
+      this.write(getManifestPath(address.key), JSON.stringify(entry))
     ])
   }
 
@@ -202,6 +290,113 @@ export class SrcSetCacheStorage {
     }
 
     return image
+  }
+
+  /**
+   * Remove the entries unused for longer than the max age. Call it when
+   * a build is over: pruning before the reads would drop the entries the
+   * build is about to hit, whose marks it has not refreshed yet.
+   * Runs once per storage instance.
+   * @returns Promise of the removal.
+   */
+  async prune() {
+    this.pruning ??= this.removeStale()
+
+    return this.pruning
+  }
+
+  private async removeStale() {
+    let paths: string[]
+
+    try {
+      paths = await readdir(this.dir)
+    } catch {
+      // No storage directory yet: nothing to remove.
+      return
+    }
+
+    const entries = new Map<string, string[]>()
+
+    for (const path of paths) {
+      const key = getEntryKey(path)
+
+      if (!key) {
+        continue
+      }
+
+      const entryPaths = entries.get(key)
+
+      if (entryPaths) {
+        entryPaths.push(path)
+      } else {
+        entries.set(key, [path])
+      }
+    }
+
+    const deadline = Date.now() - this.maxAge
+    const limit = pLimit(availableParallelism())
+
+    await Promise.all([...entries].map(([key, entryPaths]) => limit(async () => {
+      if (!await this.isStale(key, entryPaths, deadline)) {
+        return
+      }
+
+      // A file another build reads right now is safe to unlink on posix,
+      // and locked on windows - either way the failure is not ours to handle.
+      await Promise.all(entryPaths.map(async (path) => {
+        try {
+          await rm(join(this.dir, path), {
+            force: true
+          })
+        } catch {}
+      }))
+    })))
+  }
+
+  private async isStale(key: string, entryPaths: string[], deadline: number) {
+    let manifest: string
+
+    try {
+      manifest = await this.read(getManifestPath(key), 'utf8')
+    } catch (error) {
+      // Only a missing manifest makes an entry unusable. A read that failed
+      // for any other reason says nothing about the entry: keep it.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        return false
+      }
+
+      return this.isAbandoned(entryPaths)
+    }
+
+    try {
+      const { usedAt } = JSON.parse(manifest) as CacheEntry
+
+      // A mark of an older storage version, or a damaged one: the entry
+      // is unusable either way, and an unusable entry is stale.
+      return !Number.isFinite(usedAt) || usedAt < deadline
+    } catch {
+      return true
+    }
+  }
+
+  /**
+   * Tell a leftover of a crashed build from an entry a running build
+   * is writing right now: the latter is younger than the grace period.
+   * @param entryPaths - Stored files of the entry.
+   * @returns Whether the files are safe to remove.
+   */
+  private async isAbandoned(entryPaths: string[]) {
+    const deadline = Date.now() - orphanGrace
+
+    try {
+      const stats = await Promise.all(
+        entryPaths.map(path => stat(join(this.dir, path)))
+      )
+
+      return stats.every(({ mtimeMs }) => mtimeMs < deadline)
+    } catch {
+      return false
+    }
   }
 
   /**

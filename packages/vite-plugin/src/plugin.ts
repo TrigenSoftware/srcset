@@ -64,6 +64,7 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
     exclude
   } = options
   const limit = pLimit(concurrency)
+  const cacheOptions = typeof cache === 'object' ? cache : {}
   const loadFilter = createLoadFilter(include, exclude)
   // Fallback for environments without hook filters, built from the same filter.
   const matchesLoadFilter = createFilter(loadFilter.id.include, loadFilter.id.exclude)
@@ -124,9 +125,17 @@ export function srcset(options: SrcSetVitePluginOptions = {}): Plugin {
       moduleOptions = {
         ...options,
         cache: !isBuild || cache
-          ? new SrcSetCacheStorage(join(config.cacheDir, 'srcset'))
+          ? new SrcSetCacheStorage({
+            ...cacheOptions,
+            dir: cacheOptions.dir ?? join(config.cacheDir, 'srcset')
+          })
           : undefined
       }
+    },
+    // Pruning before the build would drop the entries it is about to hit,
+    // whose marks it has not refreshed yet.
+    async closeBundle() {
+      await moduleOptions.cache?.prune()
     },
     configureServer(server) {
       if (moduleOptions.cache) {

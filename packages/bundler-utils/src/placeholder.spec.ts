@@ -100,7 +100,9 @@ describe('bundler-utils', () => {
       })
 
       it('should reuse the stored placeholder from the cache', async () => {
-        const cache = new SrcSetCacheStorage(await mkdtemp(path.join(tmpdir(), 'srcset-placeholder-')))
+        const cache = new SrcSetCacheStorage({
+          dir: await mkdtemp(path.join(tmpdir(), 'srcset-placeholder-'))
+        })
         const {
           image,
           metadata
