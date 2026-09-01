@@ -70,6 +70,12 @@ describe('cli', () => {
 
         expect(parseCliArgs().help).toBe(true)
       })
+
+      it('should read the module format without validating it', () => {
+        setArgs('--module', 'typescript')
+
+        expect(parseCliArgs().module).toBe('typescript')
+      })
     })
   })
 })

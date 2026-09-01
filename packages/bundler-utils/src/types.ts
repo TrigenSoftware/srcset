@@ -29,4 +29,9 @@ export interface SrcSetImagePaths {
    * e.g. `__webpack_public_path__` of webpack.
    */
   publicPathExpression?: string
+  /**
+   * JS expression of the whole url, when it is not a path at all,
+   * e.g. an identifier the generated module imports the image with.
+   */
+  urlExpression?: string
 }

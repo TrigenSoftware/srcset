@@ -26,6 +26,10 @@ const emptyUrlExpression = "''"
  * @returns JS expression string.
  */
 function toUrlExpression(url: SrcSetImagePaths) {
+  if (url.urlExpression) {
+    return url.urlExpression
+  }
+
   if (url.publicPath !== null) {
     return JSON.stringify(url.publicPath)
   }
@@ -68,16 +72,24 @@ function findDefaultIndex(select: SrcSetEntrySelect, srcSet: SrcSetModuleEntry[]
   return index
 }
 
-function createEntryString({
-  id,
-  format,
-  type,
-  width,
-  height
-}: SrcSetModuleEntry, urlString: string) {
+function createEntryString(
+  {
+    id,
+    format,
+    type,
+    width,
+    height
+  }: SrcSetModuleEntry,
+  urlString: string,
+  typescript: boolean
+) {
+  // Without the assertion the format of a typescript module widens to `string`,
+  // and the entry stops being assignable to `SrcSetEntry`.
+  const formatString = typescript ? `${JSON.stringify(format)} as const` : JSON.stringify(format)
+
   return `{
   id: ${JSON.stringify(id)},
-  format: ${JSON.stringify(format)},
+  format: ${formatString},
   type: ${JSON.stringify(type)},
   width: ${String(width)},
   height: ${String(height)},
@@ -86,13 +98,40 @@ function createEntryString({
 }
 
 /**
+ * Options of the module code generation.
+ */
+export interface ModuleStringOptions {
+  /**
+   * Selection of the image variant for the default export.
+   */
+  select: SrcSetEntrySelect
+  /**
+   * Generated image variant entries.
+   */
+  srcSet: SrcSetModuleEntry[]
+  /**
+   * Data-url of the placeholder variant, falsy to emit `undefined`.
+   */
+  placeholder?: string | false
+  /**
+   * Generate typescript: the variant formats are narrowed with `as const`,
+   * so the entries stay assignable to `SrcSetEntry`.
+   */
+  typescript?: boolean
+}
+
+/**
  * Create ES module code for the image import.
- * @param select - Selection of the image variant for the default export.
- * @param srcSet - Generated image variant entries.
- * @param placeholder - Data-url of the placeholder variant, falsy to emit `undefined`.
+ * @param options - Options of the generation.
  * @returns Module code.
  */
-export function createModuleString(select: SrcSetEntrySelect, srcSet: SrcSetModuleEntry[], placeholder?: string | false) {
+export function createModuleString(options: ModuleStringOptions) {
+  const {
+    select,
+    srcSet,
+    placeholder,
+    typescript = false
+  } = options
   const defaultIndex = findDefaultIndex(select, srcSet)
   const urlExpressions = srcSet.map(entry => toUrlExpression(entry.url))
   const urlExpression = defaultIndex < 0 ? emptyUrlExpression : urlExpressions[defaultIndex]
@@ -103,7 +142,7 @@ export function createModuleString(select: SrcSetEntrySelect, srcSet: SrcSetModu
   srcSet.forEach((entry, index) => {
     const isDefault = index === defaultIndex
     const urlString = isDefault ? 'url' : urlExpressions[index]
-    const entryString = createEntryString(entry, urlString)
+    const entryString = createEntryString(entry, urlString, typescript)
 
     if (isDefault) {
       srcString = entryString

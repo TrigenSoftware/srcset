@@ -34,6 +34,19 @@ export interface SrcSetModuleOptions extends Omit<SrcSetGeneratorOptions, 'limit
 }
 
 /**
+ * Options of the module generation: the integration options plus what
+ * only the generation itself needs.
+ */
+export interface SrcSetModuleGenerateOptions extends SrcSetModuleOptions {
+  /**
+   * Generate typescript instead of javascript: the variant formats are
+   * narrowed with `as const`, so the entries stay assignable to `SrcSetEntry`.
+   * Bundler integrations never need it - their modules are not written to disk.
+   */
+  typescript?: boolean
+}
+
+/**
  * Emits an image on the bundler side.
  * @param image - Image variant.
  * @returns Paths of the emitted image.

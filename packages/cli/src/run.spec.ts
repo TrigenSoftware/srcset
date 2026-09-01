@@ -1,7 +1,9 @@
 import {
+  copyFile,
   mkdir,
   mkdtemp,
   readdir,
+  readFile,
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,6 +15,8 @@ import {
   expect
 } from 'vitest'
 import sharp from 'sharp'
+import { SrcSetCacheStorage } from '@srcset/core'
+import type { SrcSetCliOptions } from './types.ts'
 import { run } from './run.ts'
 
 async function createProject() {
@@ -172,6 +176,230 @@ describe('cli', () => {
           width: [1]
         }]
       })).rejects.toThrow('collision')
+    })
+
+    describe('module', () => {
+      it('should bake the module next to the variants', async () => {
+        const dir = await createProject()
+
+        await runIn(dir, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          module: 'ts',
+          skipOptimization: true,
+          rules: [
+            {
+              width: [1, 0.5],
+              format: ['jpg', 'webp']
+            }
+          ]
+        })
+
+        expect((await readdir(join(dir, 'dist/images'))).sort()).toEqual([
+          'photo.jpg',
+          'photo.ts',
+          'photo.webp',
+          'photo@320w.jpg',
+          'photo@320w.webp'
+        ])
+      })
+
+      it('should bake a folder named after the image', async () => {
+        const dir = await createProject()
+
+        await runIn(dir, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          module: 'js-dir',
+          skipOptimization: true,
+          rules: [
+            {
+              width: [1],
+              format: ['jpg', 'webp']
+            }
+          ]
+        })
+
+        expect((await readdir(join(dir, 'dist/images/photo'))).sort()).toEqual([
+          'index.js',
+          'photo.jpg',
+          'photo.webp'
+        ])
+      })
+
+      it('should import every variant of the module', async () => {
+        const dir = await createProject()
+
+        await runIn(dir, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          module: 'js',
+          skipOptimization: true,
+          rules: [
+            {
+              width: [1, 0.5],
+              format: ['jpg', 'webp']
+            }
+          ]
+        })
+
+        const module = await readFile(join(dir, 'dist/images/photo.js'), 'utf8')
+
+        // The extension is a part of the identifier: two formats of one name.
+        expect(module).toContain('import photo_jpg from "./photo.jpg"')
+        expect(module).toContain('import photo_320w_jpg from "./photo@320w.jpg"')
+        expect(module).toContain('import photo_webp from "./photo.webp"')
+        expect(module).toContain('const url = photo_jpg;')
+        expect(module).toContain('"webp320": photo_320w_webp')
+        expect(module).not.toContain('as const')
+      })
+
+      it('should narrow the variant formats of a typescript module', async () => {
+        const dir = await createProject()
+
+        await runIn(dir, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          module: 'ts',
+          skipOptimization: true
+        })
+
+        const module = await readFile(join(dir, 'dist/images/photo.ts'), 'utf8')
+
+        expect(module).toContain('format: "jpg" as const,')
+      })
+
+      it('should inline the placeholder of a baked module', async () => {
+        const dir = await createProject()
+
+        await runIn(dir, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          module: 'js',
+          skipOptimization: true,
+          placeholder: true
+        })
+
+        const module = await readFile(join(dir, 'dist/images/photo.js'), 'utf8')
+
+        expect(module).toMatch(/export const placeholder = "data:image\/webp;base64,[^"]+";/)
+      })
+
+      it('should bake a typescript folder module', async () => {
+        const dir = await createProject()
+
+        await runIn(dir, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          module: 'ts-dir',
+          skipOptimization: true,
+          rules: [
+            {
+              width: [1]
+            }
+          ]
+        })
+
+        expect((await readdir(join(dir, 'dist/images/photo'))).sort()).toEqual([
+          'index.ts',
+          'photo.jpg'
+        ])
+        expect(await readFile(join(dir, 'dist/images/photo/index.ts'), 'utf8')).toContain('format: "jpg" as const,')
+      })
+
+      it('should escape a file name the import specifier cannot hold', async () => {
+        const dir = await createProject()
+
+        await copyFile(join(dir, 'images/photo.jpg'), join(dir, "images/it's.jpg"))
+        await runIn(dir, {
+          src: "images/it's.jpg",
+          dest: 'dist',
+          module: 'js',
+          skipOptimization: true,
+          rules: [
+            {
+              width: [1]
+            }
+          ]
+        })
+
+        const module = await readFile(join(dir, "dist/images/it's.js"), 'utf8')
+
+        expect(module).toContain('import it_s_jpg from "./it\'s.jpg"')
+      })
+
+      it('should skip the module of an image no rule matched', async () => {
+        const dir = await createProject()
+        const written = await runIn(dir, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          module: 'js',
+          skipOptimization: true,
+          rules: [
+            {
+              match: '**/*.png',
+              width: [0.5]
+            }
+          ]
+        })
+
+        expect(written).toEqual([])
+      })
+
+      it('should throw when two sources want one module path', async () => {
+        const dir = await createProject()
+        const contents = await sharp({
+          create: {
+            width: 320,
+            height: 240,
+            channels: 3,
+            background: '#d53a7b'
+          }
+        }).png().toBuffer()
+
+        await writeFile(join(dir, 'images/photo.png'), contents)
+
+        await expect(runIn(dir, {
+          src: 'images/*',
+          dest: 'dist',
+          module: 'ts',
+          skipOptimization: true,
+          rules: [
+            {
+              width: [1]
+            }
+          ]
+        })).rejects.toThrow('collision')
+      })
+    })
+
+    it('should ignore a cache storage of the config', async () => {
+      const dir = await createProject()
+      const cacheDir = join(dir, 'cache')
+
+      await runIn(dir, {
+        src: 'images/*.jpg',
+        dest: 'dist',
+        skipOptimization: true,
+        // A config file is javascript: an option cut from the types still arrives.
+        cache: new SrcSetCacheStorage({
+          dir: cacheDir
+        })
+      } as unknown as SrcSetCliOptions)
+
+      await expect(readdir(cacheDir)).rejects.toThrow()
+    })
+
+    it('should throw on a source it cannot read', async () => {
+      const dir = await createProject()
+
+      await writeFile(join(dir, 'images/broken.jpg'), 'not an image')
+
+      await expect(runIn(dir, {
+        src: 'images/broken.jpg',
+        dest: 'dist',
+        skipOptimization: true
+      })).rejects.toThrow('Cannot read image "images/broken.jpg"')
     })
 
     it('should throw without matched sources', async () => {

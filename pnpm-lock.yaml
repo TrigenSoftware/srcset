@@ -180,6 +180,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@srcset/bundler-utils':
+        specifier: workspace:^
+        version: link:../bundler-utils
       '@srcset/core':
         specifier: workspace:^
         version: link:../core
