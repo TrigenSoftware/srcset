@@ -7,7 +7,7 @@ import {
 } from '@srcset/core'
 import type { QueryOptions } from './query.ts'
 import type {
-  SrcSetModuleOptions,
+  SrcSetModuleGenerateOptions,
   EmitImage
 } from './generate.types.ts'
 import {
@@ -25,7 +25,7 @@ export type * from './generate.types.ts'
  * on the bundler side and make the module code.
  * @param source - Image file.
  * @param query - Parsed import query options.
- * @param options - Bundler integration options.
+ * @param options - Options of the module generation.
  * @param emitImage - Emits an image on the bundler side.
  * @param limit - Concurrency limit of the integration.
  * @returns Module code.
@@ -33,7 +33,7 @@ export type * from './generate.types.ts'
 export async function generateSrcSetModule(
   source: ImageSource,
   query: QueryOptions,
-  options: SrcSetModuleOptions,
+  options: SrcSetModuleGenerateOptions,
   emitImage: EmitImage,
   limit?: LimitFunction
 ) {
@@ -86,5 +86,10 @@ export async function generateSrcSetModule(
     })
   }
 
-  return createModuleString(select, srcSet, placeholder)
+  return createModuleString({
+    select,
+    srcSet,
+    placeholder,
+    typescript: options.typescript
+  })
 }

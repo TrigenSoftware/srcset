@@ -22,6 +22,7 @@ export const usage = `srcset [...sources] [...options]
   --skip-optimization   Do not optimize output images.
   --no-scaling-up       Do not generate images larger than the source.
   --dest, -d            Destination directory.
+  --module              Generate an image module: ts, js, ts-dir or js-dir.
   --config, -c          Config file path. Defaults to the \`srcset.config.js\` lookup.
   --concurrency         Concurrency limit.
 `
@@ -34,6 +35,7 @@ export interface CliArgs {
   skipOptimization: boolean | undefined
   scalingUp: boolean | undefined
   dest: string | undefined
+  module: string | undefined
   config: string | undefined
   concurrency: number | undefined
 }
@@ -52,6 +54,7 @@ export function parseCliArgs(): CliArgs {
     skipOptimization,
     scalingUp,
     dest,
+    module: moduleFormat,
     config,
     concurrency
   } = readOptions(
@@ -63,6 +66,7 @@ export function parseCliArgs(): CliArgs {
     flag(autocase('skipOptimization')),
     flag(autocase('scalingUp')),
     option(alias('dest', 'd'), String),
+    option('module', String),
     option(alias('config', 'c'), String),
     option('concurrency', Number)
   )
@@ -94,6 +98,7 @@ export function parseCliArgs(): CliArgs {
     skipOptimization,
     scalingUp,
     dest,
+    module: moduleFormat,
     config,
     concurrency
   }
