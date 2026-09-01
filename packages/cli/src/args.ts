@@ -16,7 +16,7 @@ export const usage = `srcset [...sources] [...options]
   sources               Source image(s) glob patterns.
   --help, -h            Print this message.
   --verbose, -v         Print processed images.
-  --match, -m           Glob pattern(s) or media query(ies) to match images by name or size. Multiple values must all match.
+  --match, -m           Glob pattern or media query to match images by name or size. Repeat to add more - all of them must match.
   --width, -w           Output image(s) widths to resize, value less than or equal to 1 is treated as a multiplier.
   --format, -f          Output image(s) formats to convert.
   --skip-optimization   Do not optimize output images.
@@ -60,7 +60,7 @@ export function parseCliArgs(): CliArgs {
   } = readOptions(
     flag(alias('help', 'h')),
     flag(alias('verbose', 'v')),
-    option(alias('match', 'm'), Array),
+    option(alias('match', 'm'), [String]),
     option(alias('width', 'w'), Array),
     option(alias('format', 'f'), Array),
     flag(autocase('skipOptimization')),

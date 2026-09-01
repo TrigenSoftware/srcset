@@ -24,6 +24,7 @@ minimumReleaseAgeExclude:
   - '@oxlint-tsgolint/win32-arm64@0.25.0'
   - '@oxlint-tsgolint/win32-x64@0.25.0'
   - oxlint-tsgolint@0.25.0
+  - argue-cli@3.2.0
 packageExtensions:
   '@sveltejs/package':
     dependencies:

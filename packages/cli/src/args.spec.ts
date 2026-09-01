@@ -56,6 +56,22 @@ describe('cli', () => {
         })
       })
 
+      it('should keep a brace glob of the match option in one piece', () => {
+        setArgs('-m', '**/*.{jpg,png}')
+
+        expect(parseCliArgs().rule).toEqual({
+          match: ['**/*.{jpg,png}']
+        })
+      })
+
+      it('should collect the repeated match options', () => {
+        setArgs('-m', '**/*.jpg', '-m', '(min-width: 1000px)')
+
+        expect(parseCliArgs().rule).toEqual({
+          match: ['**/*.jpg', '(min-width: 1000px)']
+        })
+      })
+
       it('should support camelCase twins and negation', () => {
         setArgs('--skipOptimization', '--no-scalingUp')
 
