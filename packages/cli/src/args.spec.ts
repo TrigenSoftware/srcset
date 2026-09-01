@@ -87,6 +87,32 @@ describe('cli', () => {
         expect(parseCliArgs().help).toBe(true)
       })
 
+      it('should read the placeholder and select options', () => {
+        setArgs(
+          '--placeholder-width',
+          '24',
+          '--placeholder-format',
+          'jpg',
+          '--select-format',
+          'webp',
+          '--select-width',
+          '640'
+        )
+
+        const args = parseCliArgs()
+
+        expect(args.placeholderWidth).toBe(24)
+        expect(args.placeholderFormat).toBe('jpg')
+        expect(args.selectFormat).toBe('webp')
+        expect(args.selectWidth).toBe(640)
+      })
+
+      it('should read the negated placeholder flag', () => {
+        setArgs('--no-placeholder')
+
+        expect(parseCliArgs().placeholder).toBe(false)
+      })
+
       it('should read the module format without validating it', () => {
         setArgs('--module', 'typescript')
 
