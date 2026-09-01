@@ -18,6 +18,12 @@ const noArgs: CliArgs = {
   scalingUp: undefined,
   dest: undefined,
   module: undefined,
+  placeholder: undefined,
+  placeholderWidth: undefined,
+  placeholderFormat: undefined,
+  selectId: undefined,
+  selectFormat: undefined,
+  selectWidth: undefined,
   config: undefined,
   concurrency: undefined
 }
@@ -90,6 +96,105 @@ describe('cli', () => {
           dest: 'dist',
           module: 'typescript' as never
         })).toThrow('Unknown module format: "typescript"')
+      })
+
+      it('should switch the placeholder on', () => {
+        expect(toCliOptions({
+          ...noArgs,
+          placeholder: true
+        }, {
+          src: 'images/*.jpg',
+          dest: 'dist'
+        }).placeholder).toBe(true)
+      })
+
+      it('should read the placeholder options', () => {
+        expect(toCliOptions({
+          ...noArgs,
+          placeholderWidth: 24,
+          placeholderFormat: 'jpg'
+        }, {
+          src: 'images/*.jpg',
+          dest: 'dist'
+        }).placeholder).toEqual({
+          width: 24,
+          format: 'jpg'
+        })
+      })
+
+      it('should let the placeholder options switch the placeholder on', () => {
+        expect(toCliOptions({
+          ...noArgs,
+          placeholderWidth: 24
+        }, {
+          src: 'images/*.jpg',
+          dest: 'dist'
+        }).placeholder).toEqual({
+          width: 24
+        })
+      })
+
+      it('should keep the negated placeholder off', () => {
+        expect(toCliOptions({
+          ...noArgs,
+          placeholder: false,
+          placeholderWidth: 24
+        }, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          placeholder: true
+        }).placeholder).toBe(false)
+      })
+
+      it('should reject an unknown placeholder format', () => {
+        expect(() => toCliOptions({
+          ...noArgs,
+          placeholderFormat: 'png'
+        }, {
+          src: 'images/*.jpg',
+          dest: 'dist'
+        })).toThrow('Unknown placeholder format: "png"')
+      })
+
+      it('should fall back to the placeholder of the config', () => {
+        expect(toCliOptions(noArgs, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          placeholder: {
+            width: 8
+          }
+        }).placeholder).toEqual({
+          width: 8
+        })
+      })
+
+      it('should read the selection of the default export', () => {
+        expect(toCliOptions({
+          ...noArgs,
+          selectFormat: 'webp',
+          selectWidth: 640
+        }, {
+          src: 'images/*.jpg',
+          dest: 'dist'
+        }).select).toEqual({
+          format: 'webp',
+          width: 640
+        })
+      })
+
+      it('should replace the selection of the config', () => {
+        expect(toCliOptions({
+          ...noArgs,
+          selectId: 'jpg640'
+        }, {
+          src: 'images/*.jpg',
+          dest: 'dist',
+          select: {
+            format: 'avif'
+          }
+        }).select).toEqual({
+          id: 'jpg640'
+        })
       })
 
       it('should throw without sources', () => {

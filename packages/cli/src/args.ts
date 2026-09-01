@@ -23,6 +23,12 @@ export const usage = `srcset [...sources] [...options]
   --no-scaling-up       Do not generate images larger than the source.
   --dest, -d            Destination directory.
   --module              Generate an image module: ts, js, ts-dir or js-dir.
+  --placeholder         Add the \`placeholder\` module export - a tiny variant inlined as a data-url.
+  --placeholder-width   Placeholder width in pixels. Implies --placeholder.
+  --placeholder-format  Placeholder format: webp or jpg. Implies --placeholder.
+  --select-id           Module default export: the variant with this resource id.
+  --select-format       Module default export: the variant of this format.
+  --select-width        Module default export: the variant of this width, value less than or equal to 1 is treated as a multiplier.
   --config, -c          Config file path. Defaults to the \`srcset.config.js\` lookup.
   --concurrency         Concurrency limit.
 `
@@ -36,6 +42,12 @@ export interface CliArgs {
   scalingUp: boolean | undefined
   dest: string | undefined
   module: string | undefined
+  placeholder: boolean | undefined
+  placeholderWidth: number | undefined
+  placeholderFormat: string | undefined
+  selectId: string | undefined
+  selectFormat: string | undefined
+  selectWidth: number | undefined
   config: string | undefined
   concurrency: number | undefined
 }
@@ -55,6 +67,12 @@ export function parseCliArgs(): CliArgs {
     scalingUp,
     dest,
     module: moduleFormat,
+    placeholder,
+    placeholderWidth,
+    placeholderFormat,
+    selectId,
+    selectFormat,
+    selectWidth,
     config,
     concurrency
   } = readOptions(
@@ -67,6 +85,12 @@ export function parseCliArgs(): CliArgs {
     flag(autocase('scalingUp')),
     option(alias('dest', 'd'), String),
     option('module', String),
+    flag('placeholder'),
+    option(autocase('placeholderWidth'), Number),
+    option(autocase('placeholderFormat'), String),
+    option(autocase('selectId'), String),
+    option(autocase('selectFormat'), String),
+    option(autocase('selectWidth'), Number),
     option(alias('config', 'c'), String),
     option('concurrency', Number)
   )
@@ -99,6 +123,12 @@ export function parseCliArgs(): CliArgs {
     scalingUp,
     dest,
     module: moduleFormat,
+    placeholder,
+    placeholderWidth,
+    placeholderFormat,
+    selectId,
+    selectFormat,
+    selectWidth,
     config,
     concurrency
   }
