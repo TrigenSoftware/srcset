@@ -70,7 +70,7 @@
   "devDependencies": {
     "@size-limit/preset-small-lib": "^13.0.0",
     "@srcset/runtime": "workspace:^",
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "size-limit": "^13.0.0"
   }
 }
