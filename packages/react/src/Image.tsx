@@ -7,7 +7,6 @@ import {
   useCallback,
   useState
 } from 'react'
-import { preload } from 'react-dom'
 import {
   type SrcSetEntry,
   getImageProps
@@ -42,9 +41,7 @@ export interface ImageProps extends Omit<ComponentProps<'img'>, 'src' | 'srcSet'
    */
   placeholder?: string
   /**
-   * Load the image eagerly with high priority and preload it.
-   * Do not use inside `Picture`: the preload would request the fallback
-   * format, while the browser picks one of the `source` elements.
+   * Load the image eagerly with high priority.
    */
   priority?: boolean
 }
@@ -98,20 +95,6 @@ export function Image({
   if (width === undefined && height === undefined && src) {
     finalWidth = src.width
     finalHeight = src.height
-  }
-
-  if (priority && imageProps.src) {
-    // The request policy must match the image request,
-    // otherwise the preloaded response is not reusable.
-    preload(imageProps.src, {
-      as: 'image',
-      type: src?.type,
-      fetchPriority: 'high',
-      imageSrcSet: imageProps.srcSet,
-      imageSizes: props.sizes,
-      crossOrigin: props.crossOrigin,
-      referrerPolicy: props.referrerPolicy
-    })
   }
 
   return (

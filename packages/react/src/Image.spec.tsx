@@ -10,22 +10,11 @@ import {
   fireEvent
 } from '@testing-library/react'
 import { createRef } from 'react'
-import type * as ReactDomModule from 'react-dom'
-import { preload } from 'react-dom'
 import { Image } from './Image.tsx'
 import {
   createSrc,
   createSrcSet
 } from '../test/src.mock.ts'
-
-vi.mock('react-dom', async (importOriginal) => {
-  const original = await importOriginal<typeof ReactDomModule>()
-
-  return {
-    ...original,
-    preload: vi.fn()
-  }
-})
 
 describe('react', () => {
   describe('Image', () => {
@@ -119,7 +108,7 @@ describe('react', () => {
       expect(image).toHaveAttribute('decoding', 'async')
     })
 
-    it('should load eagerly with high priority and preload', () => {
+    it('should load eagerly with high priority', () => {
       render(
         <Image
           alt='photo'
@@ -136,15 +125,6 @@ describe('react', () => {
 
       expect(image).toHaveAttribute('loading', 'eager')
       expect(image).toHaveAttribute('fetchpriority', 'high')
-      expect(preload).toHaveBeenCalledWith('/images/image@640w.jpg', {
-        as: 'image',
-        type: 'image/jpeg',
-        fetchPriority: 'high',
-        imageSrcSet: '/images/image@320w.jpg 320w, /images/image@640w.jpg 640w',
-        imageSizes: '100vw',
-        crossOrigin: 'anonymous',
-        referrerPolicy: 'no-referrer'
-      })
     })
 
     it('should show placeholder background until load', () => {
