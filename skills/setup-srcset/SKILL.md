@@ -38,7 +38,7 @@ import url, { src, srcSet, srcMap, placeholder } from './photo.jpg'
 
 | Export | What it is |
 |---|---|
-| `default` | Url of the selected variant, e.g. `/assets/photo.f37e2d3a.jpg` |
+| `default` | Url of the selected variant, e.g. `/assets/photo-BsK7yzuP.jpg` |
 | `src` | The selected variant: `{ id, format, type, width, height, url }` |
 | `srcSet` | Every generated variant, as an array |
 | `srcMap` | Id-to-url map, e.g. `srcMap.webp600` |
@@ -54,7 +54,7 @@ Ask what the project builds with, or detect it — `vite.config.*`, `webpack.con
 |---|---|
 | Vite (also Astro, SvelteKit, Nuxt, Remix — anything on Vite) | `@srcset/vite-plugin` |
 | Webpack or Rspack (also Rsbuild) | `@srcset/loader` |
-| No bundler integration wanted, or images processed once and committed | `@srcset/cli` with `--module` — see the `srcset-cli` skill |
+| No bundler integration wanted, or images processed once and committed | `@srcset/cli` with `--module` — see the `srcset` skill |
 | Images are not in the repository — they come from an API or a CMS | `@srcset/imgproxy` or `@srcset/cloudflare` |
 
 The first three are build-time: they need the image files in the project. The proxy adapters are runtime and isomorphic: they build variant urls for images served by [imgproxy](https://imgproxy.net/) or [Cloudflare](https://developers.cloudflare.com/images/), so they need no sharp and no build step, and they install as regular dependencies rather than dev ones.
@@ -63,11 +63,11 @@ A project can use several — a bundler integration for the images it ships and 
 
 ## Install
 
-Always add `@srcset/runtime` alongside a build-time integration: it carries the `SrcSetEntry` type and the helpers that turn variants into DOM attributes.
+Always add `@srcset/runtime` alongside a build-time integration: it carries the `SrcSetEntry` type and the helpers that turn variants into DOM attributes. The integration only runs at build time, the runtime ships to the browser, so they go into different dependency groups:
 
 ```bash
-pnpm add -D @srcset/vite-plugin @srcset/runtime   # vite
-pnpm add -D @srcset/loader @srcset/runtime        # webpack / rspack
+pnpm add -D @srcset/vite-plugin   # or @srcset/loader
+pnpm add @srcset/runtime
 ```
 
 Use the project's package manager — `yarn add -D`, `npm i -D`. For a framework, add the components package too: `@srcset/react`, `@srcset/preact` or `@srcset/svelte`.
@@ -153,7 +153,7 @@ A rule is a match plus what to generate. This is where most of the setup goes, a
 - **A rule without `match` matches everything** — it belongs last, as the catch-all.
 - **`match`** takes a glob (`'**/*.png'`), a CSS media query against the source size (`'(min-width: 1920px)'`), a function, or an array of them. An array means **all** must match, not any.
 - **`width`** — a number greater than 1 is absolute pixels, a number **less than or equal to 1 is a multiplier** of the source width: `[1, 0.5]` is "original and half". Pixels are never upscaled; `scalingUp: false` drops variants requested wider than the source instead of capping them.
-- **`format`** — the **first format is the fallback**: it becomes the default export and `src`. Put the widely supported one first and the modern ones after it: `['jpg', 'webp', 'avif']`.
+- **`format`** — the default export and `src` point at the variant **in the source format at the source width**; the first format of the list takes over only when the source format is not in it. Put the widely supported one first and the modern ones after it: `['jpg', 'webp', 'avif']`.
 - **Keep png as png and gif as gif** in their own rules. Converting a png to jpg loses transparency, and a gif that is not kept as gif or webp loses its animation.
 - **Svg is never resized or converted.** A rule passes an svg through only when its `format` is unset or includes `svg` — a raster-only `format` drops the svg silently. The Vite plugin skips `.svg` imports entirely; keep them out of the loader's `test` too.
 
@@ -188,15 +188,17 @@ const sources = getSourceProps(srcSet)
 With a framework, use the components — they handle the `<picture>` structure, the blur-up placeholder and priority loading:
 
 ```tsx
-import { src, srcSet, placeholder } from './photo.jpg'
 import { Picture, Image } from '@srcset/react'
+import { src, srcSet, placeholder } from './photo.jpg'
 
-<Picture srcSet={srcSet}>
-  <Image alt='Hero photo' src={src} placeholder={placeholder} />
+const sizes = '(min-width: 900px) 800px, 100vw'
+
+<Picture srcSet={srcSet} sizes={sizes}>
+  <Image src={src} srcSet={srcSet} sizes={sizes} placeholder={placeholder} alt='Hero photo' />
 </Picture>
 ```
 
-`@srcset/preact` and `@srcset/svelte` expose the same two components.
+`srcSet` and `sizes` go to both — given only to `Picture`, the fallback `<img>` is left with one fixed url. `@srcset/preact` and `@srcset/svelte` expose the same two components; the `srcset` skill covers writing code against them.
 
 ## Override Per Import
 
@@ -221,7 +223,7 @@ The import query overrides the configured options for one import. Parts combine 
 
 - A rule set with no catch-all produces an **empty module** for an unmatched image — default export `''`, `src` is `null`, `srcSet` is `[]` — and the page silently renders no image.
 - `match` with an array is an **and**, not an or. Use separate rules for "either".
-- The first `format` is the fallback that non-supporting browsers get. `['avif', 'jpg']` hands avif to everyone as the default export.
+- The first `format` is the fallback only when the source format is missing from the list. `['avif', 'jpg']` on a jpg source still hands out the jpg; the same list on a png source hands avif to everyone.
 - In webpack and Rspack an image extension with no rule fails to import at all — there is no built-in handling for `.jpg`. Image extensions left out of the loader's `test` still need an `asset/resource` rule of their own.
 - For an SSR or SSG setup, run the loader with `emitFile: false` on the server build so the same files are not written twice.
 - Animated gif: keep `gif` or `webp` in the formats. Converting to jpg or avif flattens it to a single frame.
