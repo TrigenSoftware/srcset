@@ -40,12 +40,17 @@
 
 ```bash
 # pnpm
-pnpm add -D @srcset/loader @srcset/runtime
+pnpm add -D @srcset/loader
+pnpm add @srcset/runtime
 # yarn
-yarn add -D @srcset/loader @srcset/runtime
+yarn add -D @srcset/loader
+yarn add @srcset/runtime
 # npm
-npm i -D @srcset/loader @srcset/runtime
+npm i -D @srcset/loader
+npm i @srcset/runtime
 ```
+
+`@srcset/runtime` is a peer dependency that ships to the browser, so it goes into the regular dependencies while the loader stays a dev one.
 
 ## Usage
 
@@ -60,7 +65,7 @@ export default {
           loader: '@srcset/loader',
           options: {
             rules: [
-              // First format is the fallback: default export and src
+              // Keep jpg in the list: it is what a browser without webp or avif gets
               {
                 width: [1, 0.5],
                 format: ['jpg', 'webp', 'avif']

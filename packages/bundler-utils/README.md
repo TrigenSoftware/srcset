@@ -58,4 +58,4 @@ You probably need [@srcset/loader](https://npmjs.com/package/@srcset/loader) or 
 
 ## Documentation
 
-For more details, guides and API references, check out the [documentation website](https://srcset.js.org/api/bundler-utils/).
+For more details, guides and API references, check out the [documentation website](https://srcset.js.org).

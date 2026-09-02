@@ -68,4 +68,4 @@ function Hero() {
 
 ## Documentation
 
-For more details, guides and API references, check out the [documentation website](https://srcset.js.org/components/preact/).
+For more details, guides and API references, check out the [documentation website](https://srcset.js.org/components/).
