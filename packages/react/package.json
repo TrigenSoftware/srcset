@@ -68,8 +68,7 @@
   },
   "peerDependencies": {
     "@srcset/runtime": "workspace:^",
-    "react": ">=19",
-    "react-dom": ">=19"
+    "react": ">=19"
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^13.0.0",
