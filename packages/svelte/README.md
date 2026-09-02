@@ -66,4 +66,4 @@ npm i @srcset/svelte @srcset/runtime
 
 ## Documentation
 
-For more details, guides and API references, check out the [documentation website](https://srcset.js.org/components/svelte/).
+For more details, guides and API references, check out the [documentation website](https://srcset.js.org/components/).

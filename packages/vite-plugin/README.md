@@ -40,12 +40,17 @@ Vite plugin for generating responsive images.
 
 ```bash
 # pnpm
-pnpm add -D @srcset/vite-plugin @srcset/runtime
+pnpm add -D @srcset/vite-plugin
+pnpm add @srcset/runtime
 # yarn
-yarn add -D @srcset/vite-plugin @srcset/runtime
+yarn add -D @srcset/vite-plugin
+yarn add @srcset/runtime
 # npm
-npm i -D @srcset/vite-plugin @srcset/runtime
+npm i -D @srcset/vite-plugin
+npm i @srcset/runtime
 ```
+
+`@srcset/runtime` is a peer dependency that ships to the browser, so it goes into the regular dependencies while the plugin stays a dev one.
 
 ## Usage
 
@@ -58,7 +63,7 @@ export default defineConfig({
   plugins: [
     srcset({
       rules: [
-        // First format is the fallback: default export and src
+        // Keep jpg in the list: it is what a browser without webp or avif gets
         {
           match: '**/*.jpg',
           width: [1, 0.5],
