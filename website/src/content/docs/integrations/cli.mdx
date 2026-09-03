@@ -1,0 +1,255 @@
+---
+title: CLI
+description: '@srcset/cli: generate responsive image variants from the command line - globs, rules, the full option table, the srcset.config.js file and the output path rules.'
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components'
+
+`@srcset/cli` resizes, converts and optimizes images with [sharp](https://sharp.pixelplumbing.com/) from the command line. It takes source globs, the same [rules](/getting-started/rules/) the bundler integrations use, and a destination directory - the result is plain files, with nothing left behind in the build.
+
+With `--module` it also **bakes**: alongside the variants it writes an ES module importing them, so a project can commit the result and run without any bundler integration. That mode has [its own page](/integrations/baking/); everything below applies to it as well.
+
+## Install
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add -D @srcset/cli
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add -D @srcset/cli
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i -D @srcset/cli
+    ```
+  </TabItem>
+</Tabs>
+
+The package installs a `srcset` binary. Run it through the project's package manager so the local version is used:
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm srcset "images/*.jpg" -d static -w 1920,1280,640 -f jpg,webp,avif -v
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn srcset "images/*.jpg" -d static -w 1920,1280,640 -f jpg,webp,avif -v
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm exec srcset -- "images/*.jpg" -d static -w 1920,1280,640 -f jpg,webp,avif -v
+    ```
+  </TabItem>
+</Tabs>
+
+`-v` prints every written file, so the run above says exactly what it did:
+
+```text frame="none"
+images/hero.jpg -> static/images/hero@1920w.jpg
+images/hero.jpg -> static/images/hero@1280w.jpg
+images/hero.jpg -> static/images/hero@640w.jpg
+images/hero.jpg -> static/images/hero@1920w.webp
+images/hero.jpg -> static/images/hero@1280w.webp
+images/hero.jpg -> static/images/hero@640w.webp
+images/hero.jpg -> static/images/hero@1920w.avif
+images/hero.jpg -> static/images/hero@1280w.avif
+images/hero.jpg -> static/images/hero@640w.avif
+images/photo.jpg -> static/images/photo@1920w.jpg
+...
+```
+
+Three widths times three formats per source. Keeping `jpg` in the list is what matters: it is the variant a browser without avif or webp support can load, and the [one a `--module` default export falls back to](/getting-started/rules/#formats) when the source format is not in the list.
+
+## Command
+
+```text frame="none"
+srcset [...sources] [...options]
+```
+
+| Option | Description |
+| --- | --- |
+| `[...sources]` | Glob patterns for the source images. Quote them, or the shell expands them itself. |
+| `--dest`, `-d` | Destination directory. Required, unless the config sets `dest`. |
+| `--width`, `-w` | Widths to resize to. A value of 1 or less is a **multiplier** of the source width, above 1 it is absolute pixels and must be an integer. Defaults to the source width. |
+| `--format`, `-f` | Formats to convert to: `avif`, `webp`, `jpg`, `png` or `gif` - the first one is the [fallback](/getting-started/rules/#formats) when the source format is not among them. Defaults to the source format. `svg` is accepted only as a passthrough for svg sources; nothing is ever converted to it. |
+| `--match`, `-m` | Glob pattern or CSS media query to match images by name or size. Repeat to add more - **all** of them must match. |
+| `--module` | Bake an [image module](/integrations/baking/): `ts`, `js`, `ts-dir` or `js-dir`. Off by default. |
+| `--placeholder` | Add the `placeholder` module export - a tiny variant inlined as a data-url. `--no-placeholder` switches off one enabled in the config. |
+| `--placeholder-width` | Placeholder width in pixels, `16` by default. Implies `--placeholder`. |
+| `--placeholder-format` | Placeholder format: `webp` (default) or `jpg`. Implies `--placeholder`. |
+| `--select-id` | Module default export: the variant with this resource id, e.g. `webp640`. |
+| `--select-format` | Module default export: the variant of this format. |
+| `--select-width` | Module default export: the variant of this width; 1 or less is a multiplier. |
+| `--skip-optimization` | Do not re-encode the variant that is neither resized nor converted - it is copied byte for byte - and skip the custom `optimization` functions. |
+| `--no-scaling-up` | Drop the variants requested wider than the source instead of capping them at the source width. |
+| `--concurrency` | Concurrency limit of the sharp work. Defaults to the number of available CPU cores. |
+| `--config`, `-c` | Config file path. Defaults to looking up `srcset.config.js` in the current directory. |
+| `--verbose`, `-v` | Print every written file as `source -> output`. |
+| `--help`, `-h` | Print the usage and exit. |
+
+Anything the parser did not recognise is reported instead of being taken for a glob:
+
+```text frame="none"
+Unknown option: "--widht".
+```
+
+### Multi-value flags
+
+`-w` and `-f` take several values either comma-separated or as repeated flags - `-w 1920,1280` and `-w 1920 -w 1280` are the same thing.
+
+`-m` is different: its argument is taken as it is, because a comma is a legal character in both a brace glob and a media query list. Pass several patterns as repeated flags, and remember they combine with **and**:
+
+```sh frame="none"
+# only the jpg files whose name starts with "hero"
+pnpm srcset "images/*" -d static -m '**/*.jpg' -m '**/hero*' -w 1
+```
+
+For "either" use one brace glob, `-m '**/*.{jpg,png}'`, or one media query list.
+
+## Output paths
+
+The destination mirrors the source tree **relative to the current directory**, so `images/photo.jpg` with `-d static` lands at `static/images/photo.jpg` - and `src/images/photo.jpg` lands at `static/src/images/photo.jpg`, with the `src/` level and all. To flatten the tree, run the command from the directory holding the images:
+
+```sh frame="none"
+cd images && pnpm srcset "*.jpg" -d ../static/images -w 1280,640 -f jpg,webp
+```
+
+Resized variants get an `@<width>w` postfix built from the **actual** width: `static/images/photo@1280w.jpg`. The variant requested as the multiplier `1` gets no postfix at all, so it keeps the source file name.
+
+Sources outside the current directory keep only their file name, which means two of them can land on one output path. That stops the run rather than losing a file quietly:
+
+```text frame="none"
+Output path collision: "static/photo.jpg". Run from a directory containing every source, or process them separately.
+```
+
+## Config file
+
+Everything the flags cannot express lives in `srcset.config.js`, looked up in the current directory. It is an ES module with the options object as the default export, so the project needs `"type": "module"` in its `package.json` - or an `.mjs` file passed with `--config`.
+
+```js title="srcset.config.js"
+export default {
+  src: 'images/**/*',
+  dest: 'static',
+  rules: [
+    {
+      match: '**/*.png',
+      width: [1, 0.5],
+      format: ['png', 'webp']
+    },
+    {
+      match: '**/*.gif',
+      width: [1, 0.5],
+      format: ['gif', 'webp']
+    },
+    {
+      width: [1, 0.5],
+      format: ['jpg', 'webp', 'avif']
+    }
+  ]
+}
+```
+
+With that file in place the whole run is `pnpm srcset`.
+
+| Key | Description |
+| --- | --- |
+| `src` | Source glob pattern or an array of them. The command line sources win over it. |
+| `dest` | Destination directory. |
+| `rules` | Array of [rules](/getting-started/rules/): a `match` plus what to generate. Defaults to a single empty rule - every image, source width, source format. |
+| `module` | `ts`, `js`, `ts-dir` or `js-dir`. See [Baking modules](/integrations/baking/). |
+| `placeholder` | `true` for the defaults, or `{ width, format }`. |
+| `select` | `{ id, format, width }` - which variant the module's default export points at. |
+| `resourceId` | `(width, requestedWidth, format) => string`, the id of a variant. Defaults to `` `${format}${width}` ``, e.g. `webp640`. |
+| `processing` | [sharp output options](https://sharp.pixelplumbing.com/api-output/) per format. Merged per format over the defaults - `jpg.mozjpeg` and `png.palette`. |
+| `optimization` | Custom optimizer functions per format, `(contents, format) => Buffer`. The only way to touch svg. |
+| `skipOptimization` | Same as `--skip-optimization`. |
+| `scalingUp` | `false` is the same as `--no-scaling-up`. |
+| `postfix` | A string, or a formatter `(width, requestedWidth, format) => string`. Defaults to `@<width>w`, empty for the multiplier `1`. |
+| `concurrency` | Same as `--concurrency`. |
+| `verbose` | Same as `--verbose`. |
+
+`placeholder`, `select` and `resourceId` shape the baked module, so they do nothing without `module`.
+
+`rules`, `placeholder`, `select`, `resourceId`, `processing`, `optimization`, `skipOptimization`, `scalingUp`, `postfix` and `concurrency` are exactly the options of the bundler integrations, so a config can be lifted from a Vite or webpack setup as is.
+
+<Aside type="note" title="No cache option">
+  The bundler integrations keep a disk cache of the generated variants. The cli does not: a run is one-shot, so nothing would configure the storage and nothing would prune it. `cache` and `limit` are typed as `never`, and a stray one left in a javascript config is dropped before the generator sees it.
+</Aside>
+
+### Arguments vs config
+
+An argument wins over the config value it corresponds to. Some of them replace rather than merge:
+
+- **`-m`, `-w` and `-f` build one rule that replaces the whole `rules` list.** With the config above, `pnpm srcset -f webp` does not add webp to the three rules - it generates a single webp variant of every image, png and gif included.
+- **The select flags replace the whole `select` object.** `--select-format webp` drops a `select.width` from the config.
+- **The placeholder flags replace the whole `placeholder` object.** `--placeholder-width 24` against a config `placeholder: { format: 'jpg' }` leaves `{ width: 24 }`, back on the default webp. `--no-placeholder` beats them all and switches the export off.
+
+So only two things actually require the config file, because no flag can express them: **more than one rule**, and the options that are functions or nested objects - `resourceId`, `processing`, `optimization`, a formatter `postfix`, a matcher function. Everything else has a flag.
+
+## Recipes
+
+Convert a folder of photos to modern formats, keeping the original as the fallback (a folder with png or gif in it needs rules of their own - a flat `-f` list would convert them too):
+
+```sh frame="none"
+pnpm srcset "assets/**/*.jpg" -d dist -f jpg,webp,avif
+```
+
+Make one image responsive at several widths:
+
+```sh frame="none"
+pnpm srcset "images/hero.jpg" -d static -w 1920,1280,640 -f jpg,webp
+```
+
+Half-size copies of everything, originals untouched:
+
+```sh frame="none"
+pnpm srcset "images/*" -d thumbs -w 0.5
+```
+
+Re-encode a whole tree with the sharp defaults - no resizing, no conversion:
+
+```sh frame="none"
+pnpm srcset "images/**/*" -d optimized
+```
+
+Make it repeatable: put the sources, the destination and the rules in `srcset.config.js` and add a script.
+
+```json title="package.json"
+{
+  "scripts": {
+    "images": "srcset"
+  }
+}
+```
+
+## Verify
+
+Run with `-v` and read the `source -> output` lines: one per written variant, plus one per module when baking. The count should match the rule that matched - widths times formats. Then check the destination tree.
+
+Nothing is written when nothing matched, and that is a silent, successful run - see the pitfalls below.
+
+## Pitfalls
+
+- **Quote the source globs.** Unquoted, the shell expands them first: `**` silently loses its recursive meaning in shells without `globstar`, and zsh errors out when a pattern matches nothing.
+- **`--width 0.5` is a multiplier, `--width 500` is pixels.** `-w 1` means "the source width", which is how the untouched-size variant is requested. A fractional value above 1 is rejected: `Invalid width: 1.5`.
+- **Widths above the source width are capped, not upscaled.** For a 640px source, `-w 1920,1280,640` resolves all three to the same file, `thumb@640w.jpg`, written once. With `--no-scaling-up` those variants are dropped instead - and a run asking only for oversized widths then writes nothing at all.
+- **Without `-w` and `-f` the run only re-encodes** the originals into the destination. A valid optimize-only pass, but it produces no `srcset`.
+- **A flat `-f` list converts everything it matched.** `-f jpg,webp` over a folder with a png turns the png into a jpg, transparency and all. Per-format rules need the config file - that is what the `**/*.png` and `**/*.gif` rules in the example above are for.
+- **An image no rule matched is skipped silently.** Nothing is written for it, the run exits `0`, and in `--module` mode no module is written either. The same happens to an svg under a raster-only `-f`: svg passes through only when the format list is unset or includes `svg`.
+- **A source sharp cannot decode fails the whole run**: `Cannot read image "images/broken.jpg": Input buffer contains unsupported image format`. That is deliberate - a corrupt file the run was pointed at should not be passed over as an unmatched image.
+- **Re-running never cleans the destination.** Dropping a width or a format leaves the files it used to write in place; delete the destination directory when the rules change.
+
+<LinkCard
+  title="Baking modules"
+  href="/integrations/baking/"
+  description="--module writes an ES module importing the variants, so the images work without a bundler integration."
+/>

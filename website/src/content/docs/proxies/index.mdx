@@ -1,0 +1,190 @@
+---
+title: Introduction
+description: Runtime adapters that build srcset variant urls for images the build never sees - the shared object shape, absolute widths and the upscaling rule.
+sidebar:
+  order: 1
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components'
+
+The bundler integrations and the cli are build-time tools: they need the image files in the project, open them with [sharp](https://sharp.pixelplumbing.com/) and write the variants next to the bundle. Images that arrive at runtime - from an API, a CMS, a user upload - never reach that build, so there is nothing to generate.
+
+The proxy adapters cover that case. They generate no pixels at all: they build the urls of an image server that resizes and converts on request, and return them in the same object the integrations produce.
+
+- No sharp, no build step - the adapter is a url builder and nothing else.
+- Isomorphic: the same call runs in a server render and in the browser.
+- A regular dependency, not a dev one - the code ships to production.
+
+<CardGrid>
+  <LinkCard
+    title="@srcset/imgproxy"
+    href="/proxies/imgproxy/"
+    description="Your own imgproxy instance: presets, signed urls, any output format."
+  />
+  <LinkCard
+    title="@srcset/cloudflare"
+    href="/proxies/cloudflare/"
+    description="Cloudflare image transformations: relative urls on the zone, no signing."
+  />
+</CardGrid>
+
+A project usually needs both kinds of package: a [bundler integration](/getting-started/) for the images it ships - logos, illustrations, screenshots - and an adapter for the content images it does not own.
+
+The rest of this page is the same for both adapters, and uses `@srcset/imgproxy` in the examples. The install command, the constructor options and the service-specific details are on the page of each.
+
+## The object it returns
+
+Create the adapter once, in a module of its own, and call `image(sourceUrl, rule)` per image:
+
+```ts title="imgproxy.ts"
+import { Imgproxy } from '@srcset/imgproxy'
+
+export const imgproxy = new Imgproxy({
+  endpoint: 'https://imgproxy.example.com'
+})
+```
+
+```ts
+const image = imgproxy.image(photo.url, {
+  width: [600, 1200],
+  format: ['webp', 'jpg']
+})
+```
+
+| Field | What it is |
+| --- | --- |
+| `url` | Url of the `src` variant - the equivalent of the image module's default export |
+| `src` | The fallback variant: `{ id, format, type, width, url }` |
+| `srcSet` | Every built variant, as an array |
+| `srcMap` | Id-to-url map, e.g. `srcMap.webp600` |
+
+That is the shape an image import gives you with the [Vite plugin](/integrations/vite-plugin/) or the [loader](/integrations/loader/), so everything downstream accepts it as is. With the [components](/components/):
+
+```tsx
+import { Picture, Image } from '@srcset/react'
+import { imgproxy } from './imgproxy.ts'
+
+interface PhotoProps {
+  photo: {
+    url: string
+    alt: string
+  }
+}
+
+export function Photo({ photo }: PhotoProps) {
+  const { src, srcSet } = imgproxy.image(photo.url, {
+    width: [600, 1200],
+    format: ['webp', 'jpg']
+  })
+  const sizes = '(min-width: 768px) 50vw, 100vw'
+
+  return (
+    <Picture srcSet={srcSet} sizes={sizes}>
+      <Image alt={photo.alt} src={src} sizes={sizes} />
+    </Picture>
+  )
+}
+```
+
+Or without them, with the [runtime helpers](/api/runtime/):
+
+```ts
+import { getImageProps, getSourceProps } from '@srcset/runtime'
+
+const { src, srcSet } = imgproxy.image(photo.url, {
+  width: [600, 1200],
+  format: ['webp', 'jpg']
+})
+const imageProps = getImageProps(src, srcSet)
+const sources = getSourceProps(srcSet)
+```
+
+Two things from the build-time module have no counterpart here. There is no `placeholder`: building one means decoding the image, which is exactly what the adapter does not do - render a solid color or a CMS-provided blur hash instead. And the variants carry no `height`, because the source aspect ratio is unknown, so the `Image` component fills in only the intrinsic `width`. If the CMS reports the dimensions, pass `width` and `height` yourself - as a pair, because the component fills the intrinsic size only while neither of them is set.
+
+## One rule, absolute widths
+
+A build-time rule set picks a rule by the file path, so it needs `match`, ordering and `fallthrough`. Here you already know which image you are rendering, so `image()` takes exactly one rule with two fields.
+
+| Field | Description |
+| --- | --- |
+| `width` | Absolute output width(s) in pixels: a number or an array of numbers |
+| `format` | Output format(s): a format or an array. Defaults to the source url file extension |
+
+The variants are the cross product: formats in the given order, widths inside them. `[600, 1200]` by `['webp', 'jpg']` is four variants, and duplicates in either list are collapsed.
+
+**Widths are absolute integers greater than 1.** In the build-time rules a `width` of `0.5` is a multiplier of the source width; the source size is unknown on the client, so there is nothing to multiply and the adapter throws instead of guessing:
+
+```ts
+imgproxy.image(photo.url, { width: [1, 0.5] })
+// TypeError: The imgproxy image builder needs absolute integer widths in the rule.
+```
+
+**The source format is the fallback.** `src`, and with it `url`, is the variant of the source format - the file extension of the url - at the largest width. Write the widely supported format first and the modern ones after it, exactly as in a [generation rule](/getting-started/rules/):
+
+```ts
+imgproxy.image('https://cdn.example.com/photo.jpg', {
+  width: [600, 1200],
+  format: ['jpg', 'webp', 'avif'] // src is jpg1200
+})
+```
+
+The first format of the list takes over when the source format is not in it, so a jpg source with `format: ['webp', 'avif']` hands out the webp. That is the same rule a build-time module follows, with one difference forced by the missing source: a generation rule keeps the source *width* too, and here the source size is unknown, so the largest requested width stands in for it.
+
+<Aside>
+  The `<source>` order in the rendered `<picture>` does not follow the rule at all: `getSourceProps` always orders the groups avif, webp, then the rest, whatever order the formats were written in.
+</Aside>
+
+A rule with no `width` builds nothing, and a call that produced no variants at all throws a `TypeError` - the message asks for a `width` and a non-svg `format`.
+
+## Descriptors and upscaling
+
+Neither proxy enlarges an image: imgproxy leaves `enlarge` off unless you ask for it, and Cloudflare's default `fit=scale-down` only ever shrinks. Ask for a width above the source width and you get the source back, unresized.
+
+The variant, however, keeps the width you asked for - it is the `id`, and it is the `w` descriptor in the rendered `srcset`:
+
+```html
+<img srcset="https://.../w:2400/f:jpg/... 2400w, https://.../w:1200/f:jpg/... 1200w" />
+```
+
+If the source is 1200px wide, that first candidate is a 1200px image advertised as 2400w. The browser trusts descriptors: on a 2x display with a 1200px slot it needs 2400px of detail, so it picks the candidate that lies and then displays a 1200px image where it had decided 2400px were required - having downloaded exactly the bytes the honest 1200w candidate would have given it. The wide variant is never a win, only a chance to be wrong.
+
+So keep the rule widths within the source width. When the CMS reports the original dimensions, clamp against them:
+
+```ts
+const widths = [400, 800, 1600].filter(width => width <= photo.width)
+
+const image = imgproxy.image(photo.url, {
+  width: widths.length ? widths : [photo.width],
+  format: ['webp', 'jpg']
+})
+```
+
+The fallback keeps the call valid for a source smaller than every step. When the dimensions are not available, pick a ladder the smallest image in the library can still fill.
+
+## Passthrough
+
+Both adapters take `passthrough`, and both do the same thing with it: `url` and `src` carry the untouched source url, and `srcSet` and `srcMap` come back empty, so the markup degrades to a plain `<img src>` with no `<source>` elements.
+
+```ts
+const imgproxy = new Imgproxy({
+  endpoint: 'https://imgproxy.example.com',
+  passthrough: import.meta.env.DEV
+})
+```
+
+That is the local development mode: no imgproxy instance running, no Cloudflare zone in front of the dev server. The rule is still validated - a multiplier width throws in passthrough too - so a broken rule does not wait until deployment to show up.
+
+## Choosing between them
+
+| | `@srcset/imgproxy` | `@srcset/cloudflare` |
+| --- | --- | --- |
+| Needs | A running [imgproxy](https://imgproxy.net/) instance | A Cloudflare zone with transformations enabled |
+| `endpoint` | Required, absolute | `/cdn-cgi/image`, relative to the zone |
+| Source url | Base64url-encoded into the path | Appended to the path as it is |
+| Signing | Optional, `sign()` on the server; `insecure` without it | None |
+| Forceable formats | Anything imgproxy can save; `svg` variants are skipped | Only jpeg, webp and avif; the source format passes through unconverted |
+| Svg source | Rasterized - `jpg` unless the rule names a format | Passes through untouched |
+| Upscaling | No, `enlarge` is off | No, `fit=scale-down` |
+| Custom transformations | `processing` builds the whole path segment, so presets work | `processing` builds the whole option segment, `format=auto` included |
+
+The deciding question is usually infrastructure, not features: a site already behind Cloudflare gets transformations without deploying anything, while imgproxy is the answer when the images must not leave your own infrastructure, or when you want the transformations hidden behind server-side presets.

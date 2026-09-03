@@ -1,0 +1,254 @@
+---
+title: Baking modules
+description: 'The --module mode of @srcset/cli: write the variants plus an ES module importing them, commit the result, and ship responsive images without a bundler integration.'
+sidebar:
+  order: 4
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components'
+
+**Baking** is [`@srcset/cli`](/integrations/cli/) with `--module`: next to the generated variants it writes an ES module that imports them and exports the same `src`, `srcSet`, `srcMap` and `placeholder` a bundler integration would have produced at build time.
+
+The point is what the project then does *not* need. No plugin in the Vite config, no loader rule, no image encoding on every cold build or in CI - sharp comes with the cli, and never gets near the build of the project. The baked files are committed like any other source, and the bundler only has to do what it already does with a png: copy it and give it a url.
+
+The trade is that the variants are generated when you run the command, not when you build. Change the rules, or add an image, and you run it again.
+
+## Bake it
+
+```sh frame="none"
+pnpm srcset "images/*.jpg" -d src/baked --module ts -w 1,0.5 -f jpg,webp -v
+```
+
+```text frame="none"
+images/photo.jpg -> src/baked/images/photo.jpg
+images/photo.jpg -> src/baked/images/photo@1560w.jpg
+images/photo.jpg -> src/baked/images/photo.webp
+images/photo.jpg -> src/baked/images/photo@1560w.webp
+images/photo.jpg -> src/baked/images/photo.ts
+images/thumb.jpg -> src/baked/images/thumb.jpg
+images/thumb.jpg -> src/baked/images/thumb@320w.jpg
+images/thumb.jpg -> src/baked/images/thumb.webp
+images/thumb.jpg -> src/baked/images/thumb@320w.webp
+images/thumb.jpg -> src/baked/images/thumb.ts
+```
+
+Four variants and one module per source. Everything from the [cli page](/integrations/cli/) still holds: the destination mirrors the source tree relative to the current directory, `-w`/`-f`/`-m` build one rule that replaces the config `rules`, and several rules need `srcset.config.js`.
+
+## The generated module
+
+`thumb.jpg` was 640px wide, so `-w 1,0.5` gave a 640px and a 320px variant in each of the two formats:
+
+```ts title="src/baked/images/thumb.ts"
+import thumb_jpg from "./thumb.jpg"
+import thumb_320w_jpg from "./thumb@320w.jpg"
+import thumb_webp from "./thumb.webp"
+import thumb_320w_webp from "./thumb@320w.webp"
+
+const url = thumb_jpg;
+const src = {
+  id: "jpg640",
+  format: "jpg" as const,
+  type: "image/jpeg",
+  width: 640,
+  height: 480,
+  url: url
+};
+
+export default url;
+export { src };
+export const srcSet = [src, {
+  id: "jpg320",
+  format: "jpg" as const,
+  type: "image/jpeg",
+  width: 320,
+  height: 240,
+  url: thumb_320w_jpg
+}, {
+  id: "webp640",
+  format: "webp" as const,
+  type: "image/webp",
+  width: 640,
+  height: 480,
+  url: thumb_webp
+}, {
+  id: "webp320",
+  format: "webp" as const,
+  type: "image/webp",
+  width: 320,
+  height: 240,
+  url: thumb_320w_webp
+}];
+export const srcMap = {
+  "jpg640": url,
+  "jpg320": thumb_320w_jpg,
+  "webp640": thumb_webp,
+  "webp320": thumb_320w_webp
+};
+export const placeholder = undefined;
+```
+
+Note that the urls are not strings: every variant is an `import` of the file next to the module, so the **bundler of the project resolves it**, hashes it, and puts it where its asset pipeline puts assets. Nothing in the module assumes a public path.
+
+The exports are the [image module contract](/getting-started/image-modules/) the Vite plugin and the loader produce, so app code written against one works against the other unchanged:
+
+```tsx
+import { Picture, Image } from '@srcset/react'
+import { src, srcSet, placeholder } from './baked/images/photo'
+
+<Picture srcSet={srcSet}>
+  <Image alt='A cat' src={src} srcSet={srcSet} placeholder={placeholder} />
+</Picture>
+```
+
+Without components, `getImageProps` and `getSourceProps` from [`@srcset/runtime`](/api/runtime/) build the attributes.
+
+## The four layouts
+
+| `--module` | Writes |
+| --- | --- |
+| `ts` | The module next to the variants, named after the source: `images/thumb.ts` |
+| `js` | The same, as javascript: `images/thumb.js` |
+| `ts-dir` | A folder named after the source, holding the variants and an `index.ts` |
+| `js-dir` | The same, with an `index.js` |
+
+The flat formats mirror the source tree one to one:
+
+```text frame="none" title="--module ts"
+src/baked/images/
+├── photo.jpg
+├── photo.ts
+├── photo.webp
+├── photo@1560w.jpg
+├── photo@1560w.webp
+├── thumb.jpg
+├── thumb.ts
+├── thumb.webp
+├── thumb@320w.jpg
+└── thumb@320w.webp
+```
+
+The `-dir` formats give each image a folder of its own, which keeps a directory of many images readable and lets the app import the folder instead of a file:
+
+```text frame="none" title="--module ts-dir"
+src/baked/images/
+├── photo/
+│   ├── index.ts
+│   ├── photo.jpg
+│   ├── photo.webp
+│   ├── photo@1560w.jpg
+│   └── photo@1560w.webp
+└── thumb/
+    ├── index.ts
+    ├── thumb.jpg
+    ├── thumb.webp
+    ├── thumb@320w.jpg
+    └── thumb@320w.webp
+```
+
+```ts
+import photo from './baked/images/photo'
+```
+
+Neither layout puts an extension in the import, so the bundler resolver has to find the module on its own. For a `js` module that is the default everywhere; for a `ts` one Vite resolves it out of the box, while webpack and Rspack need `.ts` in `resolve.extensions`.
+
+## Shaping the module
+
+Three options change what the module exports, and all of them are ignored without `--module`:
+
+- `--placeholder`, `--placeholder-width`, `--placeholder-format` - inline a tiny variant as a data-url for a blur-up placeholder. 16px webp by default; it is written into the module itself, so keep it small.
+- `--select-id`, `--select-format`, `--select-width` - which variant the default export and `src` point at. Without them the module points at the variant matching the source format and the source width, falling back to the first one generated.
+- `resourceId` in the config - the id of a variant, `` `${format}${width}` `` by default, which is what the `srcMap` keys are.
+
+```sh frame="none"
+pnpm srcset "images/*.jpg" -d src/baked --module ts -w 1,0.5 -f jpg,webp \
+  --placeholder --placeholder-width 24 --select-format webp
+```
+
+```ts title="src/baked/images/thumb.ts" {6}
+import thumb_jpg from "./thumb.jpg"
+import thumb_320w_jpg from "./thumb@320w.jpg"
+import thumb_webp from "./thumb.webp"
+import thumb_320w_webp from "./thumb@320w.webp"
+
+const url = thumb_webp;
+const src = {
+  id: "webp640",
+  // ...
+};
+// ...
+export const placeholder = "data:image/webp;base64,UklGRkYAAABXRUJQVlA4IDoAAABQAwCdASoYABIAPm00lkekIyIhKAgAgA2JZQB2APwAAIMoIAD...";
+```
+
+<Aside type="caution" title="webp is not a safe fallback for everyone">
+  `--select-format webp` makes the default export a webp url. That is the one a browser gets when it ignores `srcSet` - fine for an app that already requires webp, wrong for an email or an `<img>` copied into a third-party page. Inside a `Picture` the other formats are still offered as their own `<source>`, so it is the bare `<img>` - and anything else reading the default export - that ends up webp only.
+</Aside>
+
+## What the project must provide
+
+The cli deliberately stops at the files. Four things are on the project side.
+
+### A way to import the image files
+
+The module imports `./thumb.jpg`, so the bundler must turn that into a url. Vite does it natively. Webpack and Rspack have no built-in handling for `.jpg` at all - they need an asset rule for the baked extensions:
+
+```js title="webpack.config.js"
+export default {
+  module: {
+    rules: [
+      {
+        test: /\.(jpe?g|png|gif|webp|avif)$/i,
+        type: 'asset/resource'
+      }
+    ]
+  },
+  resolve: {
+    extensions: ['...', '.ts']
+  }
+}
+```
+
+The `.ts` in `resolve.extensions` is what makes the extensionless import of a `ts` module resolve. Webpack still parses the file with the loaders configured for it, so a baked `ts` module also has to be covered by whatever compiles TypeScript in the project - `swc-loader`, `babel-loader`, `ts-loader` - or the build stops at `Module parse failed: Unexpected token` on the `as const`. A `js` module needs neither.
+
+### Ambient types for those imports
+
+Inside a `ts` module, `import thumb_jpg from "./thumb.jpg"` needs a declaration per baked extension. With Vite the `vite/client` types already declare them; otherwise write them once:
+
+```ts title="src/images.d.ts"
+declare module '*.jpg' {
+  const url: string
+  export default url
+}
+
+declare module '*.webp' {
+  const url: string
+  export default url
+}
+```
+
+The `client` types of the Vite plugin and the loader are not needed here - they describe *image imports handled by an integration*, and in a baked project the image files are plain assets.
+
+### `sideEffects: false`, to drop unused variants
+
+A module carrying an import per variant is worth tree-shaking: a page importing only `src` should not ship the other three files. Webpack leaves an unused variant out of the build only when the package says its modules have no side effects:
+
+```json title="package.json"
+{
+  "sideEffects": false
+}
+```
+
+Rollup - and so Vite - drops the unused *code* either way, but emits the asset file of the unused import regardless: only the url disappears, not the file. Webpack with the flag leaves out both.
+
+## Pitfalls
+
+- **File names are never hashed.** `thumb@320w.webp` is written exactly as the rules describe it. Cache busting is the bundler's job here - it hashes the asset when it resolves the import - or set a `postfix` in the config.
+- **An image no rule matched gets no module.** Nothing is written for it, and the run still exits `0`. A rule set without a catch-all silently bakes half a folder.
+- **Re-running never cleans the destination.** Drop a format and the module is rewritten without it, but the files it used to import stay behind. Delete the destination directory when the rules change.
+- **The baked tree is source, not build output.** It goes into version control, and out of `.gitignore` - that is the whole point of baking. Keep it out of the directories a build cleans.
+- **Sources outside the current directory keep only their file name**, so two of them can collide on one output path and stop the run. See [output paths](/integrations/cli/#output-paths).
+
+<LinkCard
+  title="CLI"
+  href="/integrations/cli/"
+  description="The command, the full option table, the config file and the output path rules."
+/>

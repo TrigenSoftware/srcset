@@ -1,0 +1,114 @@
+---
+title: Introduction
+description: Why responsive images need more than one file, and how srcset generates the widths and formats a page should offer.
+sidebar:
+  order: 1
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components'
+
+One image file cannot serve every screen. A 2560px hero is a waste on a 400px phone, a jpg is roughly twice the bytes of the same picture as [avif](https://jakearchibald.com/2020/avif-has-landed/), and a retina display asks for twice the pixels of the layout it fills. The markup for all of that already exists - [`srcset`, `sizes` and `<picture>`](https://developer.mozilla.org/en-US/docs/Learn/HTML/Multimedia_and_embedding/Responsive_images) - and what is missing is the pile of files it points at.
+
+Srcset generates that pile. You describe the widths and formats once, and the same import that used to give you a url now gives you every variant of the image.
+
+## A rule says what to generate
+
+```js
+srcset({
+  rules: [
+    {
+      width: [1920, 1280, 640],
+      format: ['jpg', 'webp', 'avif']
+    }
+  ]
+})
+```
+
+Three widths in three formats: nine files per image, encoded at build time with [sharp](https://sharp.pixelplumbing.com/). A width of 1 or less is a multiplier instead - `width: [1, 0.5]` means "the original and a half sized copy" - and rules can be scoped to some images and not others. That is the whole model, and the [rules](/getting-started/rules/) page is where it lives.
+
+## The import gives you the set
+
+```ts
+import url, { src, srcSet, srcMap, placeholder } from './photo.jpg'
+```
+
+| Export | What it is |
+| --- | --- |
+| `default` | Url of the selected variant, e.g. `/assets/photo-BsK7yzuP.jpg` |
+| `src` | The selected variant: `{ id, format, type, width, height, url }` |
+| `srcSet` | Every generated variant, as an array |
+| `srcMap` | Id-to-url map, e.g. `srcMap.webp640` |
+| `placeholder` | Blur-up data-url, when the `placeholder` option is on |
+
+The module is tree-shakable, so an import of `url` alone leaves the rest out of the bundle.
+
+## The markup goes to the browser
+
+```tsx
+import { Picture, Image } from '@srcset/react'
+import { src, srcSet } from './photo.jpg'
+
+// The layout width of the image, which the browser needs before it has laid
+// the page out: 800px on wide screens, the full viewport width otherwise.
+const sizes = '(min-width: 900px) 800px, 100vw'
+
+<Picture srcSet={srcSet} sizes={sizes}>
+  <Image src={src} srcSet={srcSet} sizes={sizes} alt='A photo' />
+</Picture>
+```
+
+Both components take the same `srcSet`: `Picture` splits it into a `<source>` per format. `Image` also gets `src`, the variant that is the primary one - it narrows the set to that format for the fallback `<img>`, and takes its intrinsic size from it. Which comes out as this:
+
+```html
+<picture>
+  <source type="image/avif" sizes="(min-width: 900px) 800px, 100vw"
+    srcset="/assets/photo-BsK7yzuP.avif 1920w,
+            /assets/photo-BsK7yzuP@1280w.avif 1280w,
+            /assets/photo-BsK7yzuP@640w.avif 640w">
+  <source type="image/webp" sizes="(min-width: 900px) 800px, 100vw"
+    srcset="/assets/photo-BsK7yzuP.webp 1920w,
+            /assets/photo-BsK7yzuP@1280w.webp 1280w,
+            /assets/photo-BsK7yzuP@640w.webp 640w">
+  <img alt="A photo" width="1920" height="1280" loading="lazy" decoding="async"
+    sizes="(min-width: 900px) 800px, 100vw"
+    src="/assets/photo-BsK7yzuP.jpg"
+    srcset="/assets/photo-BsK7yzuP.jpg 1920w,
+            /assets/photo-BsK7yzuP@1280w.jpg 1280w,
+            /assets/photo-BsK7yzuP@640w.jpg 640w">
+</picture>
+```
+
+A `<source>` per format, ordered so a browser takes avif if it can and webp if not, and an `<img>` that carries the jpg as the fallback and its own list of widths. The intrinsic `width` and `height` come from the selected variant and hold the layout still while the image loads. Without a framework the same attributes come from [`getSourceProps` and `getImageProps`](/api/runtime/).
+
+<Aside title="Retina comes for free">
+  A `w` descriptor states how wide the file is, not which screen it is for. The browser multiplies the layout width from `sizes` by its own pixel ratio and picks a file that covers the result - in practice the smallest one that does. With the rule above, 800px of layout takes the 1280px file on an ordinary screen; a retina display needs 1600 real pixels, so it takes the 1920px one. One list of widths serves every density, and there is no separate `@2x` rule to write - just make sure the list reaches twice the largest layout width.
+</Aside>
+
+## Pick an integration
+
+<CardGrid>
+  <LinkCard
+    title="Vite"
+    href="/integrations/vite-plugin/"
+    description="Also Astro, SvelteKit, Nuxt - anything built on Vite."
+  />
+  <LinkCard
+    title="Webpack and Rspack"
+    href="/integrations/loader/"
+    description="One loader for both, and for the tools built on them."
+  />
+  <LinkCard
+    title="Command line"
+    href="/integrations/cli/"
+    description="Process images once and commit the result - no bundler integration at all."
+  />
+  <LinkCard
+    title="Images from an API or a CMS"
+    href="/proxies/"
+    description="Runtime adapters for imgproxy and Cloudflare - no build step, no sharp."
+  />
+</CardGrid>
+
+The first three are build-time: they need the image files in the project. The proxy adapters are runtime and isomorphic - they build variant urls for images an [imgproxy](https://imgproxy.net/) or [Cloudflare](https://developers.cloudflare.com/images/) server transforms, so they need no sharp and no build step.
+
+A project can use several at once: a bundler integration for the images it ships, an adapter for the ones a CMS serves. Whichever one it is, its own page carries the install command and the options. For a framework, there are components on top: [`@srcset/react`, `@srcset/preact` and `@srcset/svelte`](/components/).

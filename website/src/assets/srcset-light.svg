@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 62 272 216" width="272" height="216" role="img" aria-label="One image, a set of variants">
+  <g transform="translate(226,170) rotate(-7) scale(11) translate(-14.32,-14.24)">
+    <rect x="4.76" y="6.6" width="19.12" height="15.28" rx="0.6" fill="hsl(45, 40%, 99%)"/>
+    <rect x="5.64" y="7.48" width="17.36" height="13.52" fill="hsl(203, 74%, 80%)"/>
+    <circle cx="18.62" cy="11.24" r="2.26" fill="hsl(45, 95%, 58%)"/>
+    <path d="M5.64 19 10.24 13.24 15.76 19.12 18.52 15.88 23 21 5.64 21z" fill="hsl(115, 20%, 40%)"/>
+    <rect x="4.76" y="6.6" width="19.12" height="15.28" rx="0.6" fill="none" stroke="hsl(41, 14%, 78%)" stroke-width="0.07"/>
+  </g>
+  <g transform="translate(240,168) rotate(-3.5) scale(11) translate(-14.32,-14.24)">
+    <rect x="4.76" y="6.6" width="19.12" height="15.28" rx="0.6" fill="hsl(45, 40%, 99%)"/>
+    <rect x="5.64" y="7.48" width="17.36" height="13.52" fill="hsl(203, 74%, 80%)"/>
+    <circle cx="18.62" cy="11.24" r="2.26" fill="hsl(45, 95%, 58%)"/>
+    <path d="M5.64 19 10.24 13.24 15.76 19.12 18.52 15.88 23 21 5.64 21z" fill="hsl(115, 20%, 40%)"/>
+    <rect x="4.76" y="6.6" width="19.12" height="15.28" rx="0.6" fill="none" stroke="hsl(41, 14%, 78%)" stroke-width="0.07"/>
+  </g>
+  <g transform="translate(254,166) rotate(0) scale(11) translate(-14.32,-14.24)">
+    <rect x="4.76" y="6.6" width="19.12" height="15.28" rx="0.6" fill="hsl(45, 40%, 99%)"/>
+    <rect x="5.64" y="7.48" width="17.36" height="13.52" fill="hsl(203, 74%, 80%)"/>
+    <circle cx="18.62" cy="11.24" r="2.26" fill="hsl(45, 95%, 58%)"/>
+    <path d="M5.64 19 10.24 13.24 15.76 19.12 18.52 15.88 23 21 5.64 21z" fill="hsl(115, 20%, 40%)"/>
+    <rect x="4.76" y="6.6" width="19.12" height="15.28" rx="0.6" fill="none" stroke="hsl(41, 14%, 78%)" stroke-width="0.07"/>
+  </g>
+</svg>

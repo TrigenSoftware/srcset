@@ -1,0 +1,190 @@
+---
+title: Vite plugin
+description: Setup and option reference for @srcset/vite-plugin - image imports processed by default, disk cache in the Vite cache directory, and variants served from it in development.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+`@srcset/vite-plugin` takes over image imports and turns each of them into a [module carrying every generated variant](/getting-started/image-modules/).
+
+It runs with `enforce: 'pre'`, so it claims the imports before the Vite asset pipeline sees them. Everything the plugin does not claim is left to Vite untouched.
+
+## Install
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add -D @srcset/vite-plugin
+    pnpm add @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add -D @srcset/vite-plugin
+    yarn add @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i -D @srcset/vite-plugin
+    npm i @srcset/runtime
+    ```
+  </TabItem>
+</Tabs>
+
+`@srcset/runtime` is a peer dependency - it carries the `SrcSetEntry` type and the helpers that turn variants into DOM attributes. It ships to the browser, so it goes into the regular dependencies while the plugin stays a dev one. Vite 5 or newer is the other peer.
+
+## Usage
+
+```js title="vite.config.js"
+import { defineConfig } from 'vite'
+import { srcset } from '@srcset/vite-plugin'
+
+export default defineConfig({
+  plugins: [
+    srcset({
+      rules: [
+        // Png keeps its format for the transparency, plus a webp twin.
+        {
+          match: '**/*.png',
+          width: [1, 0.5],
+          format: ['png', 'webp']
+        },
+        // Everything else: jpg for the reach, webp and avif for the size.
+        {
+          width: [1, 0.5],
+          format: ['jpg', 'webp', 'avif']
+        }
+      ],
+      placeholder: true
+    })
+  ]
+})
+```
+
+```ts
+import url, { src, srcSet, srcMap, placeholder } from './photo.jpg'
+```
+
+The rule model - matching, widths, formats, encoding options - is the same for every build-time integration and is documented on the [Rules](/getting-started/rules/) page. What the import gives you back is on the [Image modules](/getting-started/image-modules/) page.
+
+Without `rules` the plugin falls back to a single empty rule: every image is re-encoded once, at its own width and in its own format. That is a useful smoke test, but it generates no responsive variants.
+
+## What gets processed
+
+By default the plugin claims imports whose id ends with a raster image extension, with or without a query:
+
+- `.jpg`, `.jpeg`, `.png`, `.webp`, `.avif`, `.gif`
+
+`.svg` is not in that list, so svg imports stay in the Vite asset pipeline. Svg is never resized or converted anyway, so there is nothing to generate for it.
+
+Two more groups are skipped whatever `include` and `exclude` say:
+
+- **Native Vite queries** - `?url`, `?raw`, `?inline`, `?no-inline`, `?worker`, `?sharedworker`, `?init`. `import iconUrl from './icon.png?url'` still returns a plain url string.
+- **Virtual modules** - ids of other plugins, which start with a null byte.
+
+Assets in `publicDir` are also left alone: a root-absolute import that does not exist on disk but does exist under the public directory goes back to Vite.
+
+## `include` and `exclude`
+
+Both take a picomatch glob, a regexp, or an array of them; string patterns are matched against the **absolute module id**, query included.
+
+```js title="vite.config.js"
+srcset({
+  // Only the images of this directory, and none of the icons.
+  include: ['**/src/images/**/*.{jpg,jpeg,png}'],
+  exclude: [/\/node_modules\//, '**/src/icons/**']
+})
+```
+
+<Aside type="caution" title="include replaces the extension pattern">
+  `include` does not narrow the default list of image extensions, it **replaces** it. A pattern like `'**/src/images/**'` matches every file in that directory - text, fonts, anything - and hands it to sharp, which fails the build with `Input buffer contains unsupported image format`. Keep the extensions in the pattern: `'**/src/images/**/*.{jpg,png}'`.
+
+  A glob that ends at the extension does not match an id with an [import query](#import-query), though - `./photo.jpg?width=600` falls back to the Vite asset pipeline and imports as a plain url. The default pattern allows the query, so match it too when the project uses one:
+
+  ```js
+  srcset({
+    include: [/\/src\/images\/.*\.(?:jpe?g|png)(?:\?|$)/]
+  })
+  ```
+
+  The same holds for `exclude`, which replaces the `node_modules` default. Repeat it if you still want it.
+</Aside>
+
+## Options
+
+Plugin options, all optional:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `rules` | `SrcSetRule[]` | one empty rule | Rules to generate the variants. A [rule in the import query](/getting-started/image-modules/) replaces them for that import. |
+| `placeholder` | `boolean \| { width, format }` | off | Adds the `placeholder` export - a tiny variant inlined as a data-url. Defaults to 16px wide webp; `format` is `'webp'` or `'jpg'`. |
+| `select` | `{ id?, format?, width? }` | the source format at the source width | Which variant the default export and `src` point at. `width` may be an absolute value or a multiplier less than or equal to 1. The import query takes precedence. |
+| `resourceId` | `(width, requestedWidth, format) => string` | `` `${format}${width}` `` | Formatter of the `srcMap` keys and of `src.id`. |
+| `cache` | `boolean \| { dir, maxAge }` | `true` | Disk cache of the generated variants - see [Caching](#caching). |
+| `include` | `string \| RegExp \| (string \| RegExp)[]` | the image extensions above | Ids to process. |
+| `exclude` | `string \| RegExp \| (string \| RegExp)[]` | `/\/node_modules\//` | Ids to skip. |
+
+The generator options below are inherited from the shared generation core. Set them on the plugin as the defaults for every image; all of them except `concurrency` can also be set per rule, where they override the plugin-level value:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `processing` | `{ jpg?, png?, webp?, avif?, gif? }` | `{ jpg: { mozjpeg: true }, png: { palette: true } }` | [Sharp output options](https://sharp.pixelplumbing.com/api-output/) per format. Merged per format, so overriding one option keeps the rest of the defaults. |
+| `optimization` | `{ jpg?, png?, webp?, avif?, gif?, svg? }` | none | Custom optimizer function per format, `(contents, format) => Buffer`, applied to the encoded contents. The only way to touch svg, e.g. with `svgo`. |
+| `skipOptimization` | `boolean` | `false` | Do not re-encode the original variant and skip the custom optimizers. |
+| `scalingUp` | `boolean` | `true` | Keep variants requested wider than the source, capped to the source width. `false` drops them instead. Pixels are never upscaled either way. |
+| `postfix` | `string \| (width, requestedWidth, format) => string` | `@<width>w`, empty for the `1` multiplier | Postfix added to the variant file name. A formatter must be pure - it also participates in the cache addressing. |
+| `concurrency` | `number` | `availableParallelism()` | How many variants are encoded in parallel. Plugin level only. |
+
+## Caching
+
+The cache is **on by default** and lives in `srcset/` inside the Vite cache directory - `node_modules/.vite/srcset` in a default setup. A cached variant is read from disk instead of being encoded again, so a repeated build only pays for the images that changed.
+
+```js title="vite.config.js"
+srcset({
+  cache: {
+    dir: '.cache/srcset',
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  }
+})
+```
+
+- `dir` - where to store the variants and their manifests.
+- `maxAge` - how long an unused entry survives, in milliseconds. Defaults to 30 days. Stale entries are pruned after the bundle is written, never before it: pruning first would drop the entries the build is about to hit.
+
+The address of an entry covers the source contents, the variant and every generation option, function options included - they are keyed by their source text. Changing a rule, a sharp option or an optimizer function therefore misses the cache instead of serving a stale file.
+
+<Aside type="note" title="The dev server always uses the storage">
+  In development the plugin creates the storage even with `cache: false`, and serves the variants from it through a middleware under `/@srcset/`, rather than emitting them. `cache: false` only disables the cache for builds.
+</Aside>
+
+## TypeScript
+
+The plugin ships ambient declarations for the image imports. Reference them once, in a `.d.ts` of the project or through the tsconfig `types` array:
+
+```ts title="src/vite-env.d.ts"
+/// <reference types="vite/client" />
+/// <reference types="@srcset/vite-plugin/client" />
+```
+
+The srcset declarations cover only the named exports - `src`, `srcSet`, `srcMap`, `placeholder`. The default url export comes from the `vite/client` asset types, which `@srcset/vite-plugin/client` references itself, so the default import stays typed either way - **keep the project's own `vite/client` reference** for the rest of the Vite types. A missing srcset reference shows up as `Module '"*.jpg"' has no exported member 'srcSet'`.
+
+## Import query
+
+The query of a single import overrides the configured options for that import only:
+
+```ts
+import wide from './photo.jpg?{"width":[1,0.5],"format":["webp","jpg"]}'
+import small from './photo.jpg?format=webp&width=600'
+```
+
+A JSON rule replaces the whole rule set; `id=`, `format=` and `width=` pick the variant behind the default export; `placeholder` and `placeholder=false` switch that export on and off. Parts combine with `&`. The full syntax is on the [Image modules](/getting-started/image-modules/) page.
+
+## Pitfalls
+
+- **No catch-all rule.** An image matched by no rule produces an empty module - default export `''`, `src` is `null`, `srcSet` is `[]` - and the page silently renders nothing. Keep a rule without `match` last.
+- **`include` is a replacement, not an addition.** See the warning above.
+- **A missing `@srcset/vite-plugin/client` reference.** The image import then carries the default url export from `vite/client` and nothing else, and every named import fails to type-check.
+- **Encoding is not free.** The first build of an image-heavy project spends real time in sharp, and every build after it reads the variants back from the cache. On CI that cache sits in `node_modules/.vite`, so it survives only if the workflow restores that directory.

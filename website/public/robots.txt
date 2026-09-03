@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://srcset.js.org/sitemap-index.xml

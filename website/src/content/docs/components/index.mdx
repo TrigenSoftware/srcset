@@ -1,0 +1,425 @@
+---
+title: Components
+description: Picture and Image for React, Preact and Svelte - sources ordered by format efficiency, blur-up placeholders, anti-CLS sizing and priority loading.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+`@srcset/react`, `@srcset/preact` and `@srcset/svelte` ship the same two components. `Picture` renders a `<picture>` with one `<source>` per format, `Image` renders the `<img>`. Both take the exports of an [image module](/getting-started/image-modules/) as they are - and the object a [proxy adapter](/proxies/) builds at runtime has the same shape, so it works too.
+
+The components are thin wrappers around the helpers of [`@srcset/runtime`](/api/runtime/): they add the markup structure, the blur-up placeholder, the intrinsic size and the loading attributes. Pick a framework in the tabs - the choice is remembered down the page - and everything outside the tabs applies to all three packages alike.
+
+## Install
+
+<Tabs syncKey="framework">
+<TabItem label="React">
+
+Needs `react` 19 or newer and `@srcset/runtime` - both are peer dependencies.
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add @srcset/react @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add @srcset/react @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i @srcset/react @srcset/runtime
+    ```
+  </TabItem>
+</Tabs>
+
+</TabItem>
+<TabItem label="Preact">
+
+Needs `preact` 10.28 or newer and `@srcset/runtime` - both are peer dependencies.
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add @srcset/preact @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add @srcset/preact @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i @srcset/preact @srcset/runtime
+    ```
+  </TabItem>
+</Tabs>
+
+</TabItem>
+<TabItem label="Svelte">
+
+Needs `svelte` 5 or newer and `@srcset/runtime` - both are peer dependencies.
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add @srcset/svelte @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add @srcset/svelte @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i @srcset/svelte @srcset/runtime
+    ```
+  </TabItem>
+</Tabs>
+
+</TabItem>
+</Tabs>
+
+What they render comes from an image module, so a build-time [integration](/getting-started/) or a [proxy adapter](/proxies/) has to be in place first.
+
+## Usage
+
+<Tabs syncKey="framework">
+<TabItem label="React">
+
+```tsx title="Hero.tsx"
+import { Picture, Image } from '@srcset/react'
+import { src, srcSet, placeholder } from './photo.jpg'
+
+const sizes = '(max-width: 48rem) 100vw, 48rem'
+
+export function Hero() {
+  return (
+    <Picture
+      srcSet={srcSet}
+      sizes={sizes}
+    >
+      <Image
+        alt='A cat on a windowsill'
+        src={src}
+        srcSet={srcSet}
+        placeholder={placeholder}
+        sizes={sizes}
+      />
+    </Picture>
+  )
+}
+```
+
+</TabItem>
+<TabItem label="Preact">
+
+```tsx title="Hero.tsx"
+import { Picture, Image } from '@srcset/preact'
+import { src, srcSet, placeholder } from './photo.jpg'
+
+const sizes = '(max-width: 48rem) 100vw, 48rem'
+
+export function Hero() {
+  return (
+    <Picture
+      srcSet={srcSet}
+      sizes={sizes}
+    >
+      <Image
+        alt='A cat on a windowsill'
+        src={src}
+        srcSet={srcSet}
+        placeholder={placeholder}
+        sizes={sizes}
+      />
+    </Picture>
+  )
+}
+```
+
+</TabItem>
+<TabItem label="Svelte">
+
+```svelte title="Hero.svelte"
+<script>
+  import { Picture, Image } from '@srcset/svelte'
+  import { src, srcSet, placeholder } from './photo.jpg'
+
+  const sizes = '(max-width: 48rem) 100vw, 48rem'
+</script>
+
+<Picture {srcSet} {sizes}>
+  <Image
+    alt="A cat on a windowsill"
+    {src}
+    {srcSet}
+    {placeholder}
+    {sizes}
+  />
+</Picture>
+```
+
+</TabItem>
+</Tabs>
+
+Both components take the same `srcSet` array: `Picture` groups it into `<source>` elements, `Image` narrows it to the format of `src` for the `<img>`. Pass it to both - given only to `Picture`, the fallback `<img>` is left with one fixed url.
+
+`Image` works on its own as well: without a `Picture` around it the `<img>` carries the variants of a single format, which is enough when the rule generates only one.
+
+<Aside type="caution">
+`<picture>` renders nothing without a child `<img>`. `Picture` only builds the `<source>` elements - the element that actually displays an image is the `<img>` inside it, so the `children` prop is required and must contain an `Image` or a plain `<img>`.
+</Aside>
+
+## What they render
+
+An image module built with three formats and two widths, rendered as above, produces this:
+
+```html
+<picture>
+  <source type="image/avif" srcset="/assets/photo@480w.avif 480w, /assets/photo@960w.avif 960w" sizes="(max-width: 48rem) 100vw, 48rem">
+  <source type="image/webp" srcset="/assets/photo@480w.webp 480w, /assets/photo@960w.webp 960w" sizes="(max-width: 48rem) 100vw, 48rem">
+  <source type="image/jpeg" srcset="/assets/photo@480w.jpg 480w, /assets/photo@960w.jpg 960w" sizes="(max-width: 48rem) 100vw, 48rem">
+  <img alt="A cat on a windowsill" sizes="(max-width: 48rem) 100vw, 48rem" src="/assets/photo@960w.jpg" srcset="/assets/photo@480w.jpg 480w, /assets/photo@960w.jpg 960w" width="960" height="720" loading="lazy" decoding="async" data-loading="">
+</picture>
+```
+
+That is the markup of the first render: `data-loading` sits on the `<img>` until the load event fires, with or without a placeholder, and the attribute order follows the props.
+
+## Why not build the srcset by hand
+
+The two attributes look trivial and are not:
+
+- **One `<source>` per mime type.** A `<source>` carries a single `type`, and the browser takes the **first** one it supports - so the variants have to be grouped by mime type and the groups ordered by format efficiency: avif, webp, then the rest. A jpg group placed first would be picked by every browser and the modern formats would never load.
+- **The `<img>` gets one format.** The `<img>` has no type negotiation, so its `srcset` must hold variants of the fallback format only. `Image` filters the set down to the format of `src`, and drops the attribute entirely when the result would just repeat the `src` url.
+- **Width descriptors need the widths.** Each entry is `url 960w`, and the numbers must be the real widths of the files, not the widths you asked for.
+
+If you render the markup yourself, use `getSourceProps` and `getImageProps` from [`@srcset/runtime`](/api/runtime/) - the components call exactly those.
+
+<Aside>
+`Image` without `src` builds the `srcset` from every variant it is given, whatever their formats. Pass `src` too, or keep such a list to a single format. A ready `srcset` string is also accepted and passed through untouched, which is how [density descriptors](/api/runtime/) get in.
+</Aside>
+
+## sizes
+
+Set `sizes` on **both** components, with the same value:
+
+```jsx
+const sizes = '(max-width: 48rem) 100vw, 48rem'
+
+<Picture srcSet={srcSet} sizes={sizes}>
+  <Image src={src} srcSet={srcSet} sizes={sizes} alt='A cat on a windowsill'/>
+</Picture>
+```
+
+`Picture` puts its `sizes` on every generated `<source>`, `Image` puts its own on the `<img>`. The `sizes` of an `<img>` does **not** apply to a `<source>` the browser has selected, so the `<source>` elements of a `Picture` without `sizes` keep the default `100vw` - the browser then picks a variant for the full viewport width even when the image sits in a narrow column.
+
+## Placeholder
+
+The `placeholder` export is a tiny image inlined as a data-url. Pass it to `Image` and it becomes the background of the `<img>` until the real file arrives:
+
+```jsx
+<Image
+  src={src}
+  srcSet={srcSet}
+  placeholder={placeholder}
+  alt='A cat on a windowsill'
+/>
+```
+
+While the image is loading the element carries a `data-loading` attribute, which is the hook for styling the transition:
+
+```css
+img[data-loading] {
+  filter: blur(16px);
+}
+
+img {
+  transition: filter 0.2s;
+}
+```
+
+The background is set with `background-size: cover`, and your own `style` is merged after it, so a background of your own wins. On the server the state is always "loading", so the blurred preview is part of the SSR markup; on mount the components check the element's `complete` and `naturalWidth`, so a cached image skips the placeholder entirely instead of flashing it after hydration.
+
+The placeholder is shown **once per mount**. Swapping `src` on a mounted `Image` keeps the loaded state, so the new image appears without a preview - remount the component instead: a `key` in React and Preact, a `{#key}` block in Svelte. Both are in the reference below.
+
+## Size without layout shift
+
+When neither `width` nor `height` is given, `Image` fills both from `src`, so the browser reserves the right box before the file arrives. Scale it with CSS as usual:
+
+```css
+img {
+  width: 100%;
+  height: auto;
+}
+```
+
+The intrinsic pair applies **only as a whole**. Setting just one of the two disables it: filling the other dimension from the variant would skew the aspect ratio if the explicit value differs from the variant width. So pass both or neither.
+
+<Aside>
+Variants built by the [proxy adapters](/proxies/) have no `height` - the source dimensions are unknown on the client. Only `width` gets filled there, so set the pair yourself or reserve the box with an `aspect-ratio` in CSS.
+</Aside>
+
+## priority
+
+`Image` is `loading="lazy"` and `decoding="async"` by default. For the image that is the largest contentful paint of the page, that is exactly wrong: `priority` switches it to `loading="eager"` with `fetchpriority="high"`.
+
+```jsx
+<Image
+  src={src}
+  srcSet={srcSet}
+  sizes={sizes}
+  priority
+  alt='A cat on a windowsill'
+/>
+```
+
+Use it for one image per page. Marking everything as priority is the same as marking nothing.
+
+It behaves the same in all three packages, and none of them preloads: `priority` only sets the two attributes, so it is safe inside a `Picture`. When a hero image needs a head start beyond that, put a `<link rel="preload">` in the document head yourself - and point it at the format the browser will actually take, which inside a `<picture>` is not the fallback.
+
+## Reference
+
+<Tabs syncKey="framework">
+<TabItem label="React">
+
+#### Picture props
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `srcSet` | `SrcSetEntry[]` | Variants to render the `<source>` elements from, grouped by mime type and ordered by format efficiency. Required. |
+| `sizes` | `string` | `sizes` for every generated `<source>`. Should match the `sizes` of the `<img>`. |
+| `children` | `ReactNode` | Content of the `<picture>`, required: it must contain an `<img>`. |
+
+Every other prop goes to the `<picture>` element - `className`, `style`, `id`, event handlers.
+
+#### Image props
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `src` | `SrcSetEntry` | Variant for the `src` attribute and the intrinsic size. |
+| `srcSet` | `SrcSetEntry[] \| string` | Variants for the `srcset` attribute, filtered to the format of `src` - or a ready `srcset` string, used as it is. |
+| `placeholder` | `string` | Data-url shown as a background until the image loads. |
+| `priority` | `boolean` | Eager loading and `fetchpriority="high"`. |
+
+Every other prop goes to the `<img>`: `alt`, `sizes`, `className`, `style`, `ref`, `onLoad`, `crossOrigin`, `referrerPolicy` and the rest. `loading` defaults to `lazy` and `decoding` to `async`; both, and an explicit `width` / `height` pair, override the defaults.
+
+#### React specifics
+
+- **`'use client'`.** `Image` holds the loaded state, so it is a client module. The published build keeps client modules in a chunk of their own with the directive on top, so in an RSC application `Picture` still renders on the server and `Image` crosses to the client without a wrapper of yours.
+- **`ref`.** React 19 passes `ref` as a regular prop, so `<Image ref={...}/>` points at the `<img>`. Callback refs that return a cleanup function are supported - the cleanup is passed through untouched.
+- Prop names are the React ones: `className`, `fetchPriority`, `onLoad`.
+- To reset the placeholder for a new source, remount with a `key`:
+
+  ```jsx
+  <Image
+    key={photo.src.url}
+    alt={photo.alt}
+    src={photo.src}
+    srcSet={photo.srcSet}
+    placeholder={photo.placeholder}
+  />
+  ```
+
+</TabItem>
+<TabItem label="Preact">
+
+#### Picture props
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `srcSet` | `SrcSetEntry[]` | Variants to render the `<source>` elements from, grouped by mime type and ordered by format efficiency. Required. |
+| `sizes` | `string` | `sizes` for every generated `<source>`. Should match the `sizes` of the `<img>`. |
+| `children` | `ComponentChildren` | Content of the `<picture>`, required: it must contain an `<img>`. |
+
+Every other prop goes to the `<picture>` element - `class` or `className`, `style`, `id`, event handlers.
+
+#### Image props
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `src` | `SrcSetEntry` | Variant for the `src` attribute and the intrinsic size. |
+| `srcSet` | `SrcSetEntry[] \| string` | Variants for the `srcset` attribute, filtered to the format of `src` - or a ready `srcset` string, used as it is. |
+| `placeholder` | `string` | Data-url shown as a background until the image loads. |
+| `priority` | `boolean` | Eager loading and `fetchpriority="high"`. |
+| `style` | `CSSProperties` | Inline styles, merged with the placeholder background. An object, not a string. |
+| `imgRef` | `Ref<HTMLImageElement>` | Ref to the `<img>` element. |
+
+Every other prop goes to the `<img>`: `alt`, `sizes`, `class`, `onLoad` and the rest. `loading` defaults to `lazy` and `decoding` to `async`; both, and an explicit `width` / `height` pair, override the defaults.
+
+#### Preact specifics
+
+- **`imgRef` instead of `ref`.** Plain Preact does not forward `ref` to function components, so the ref has a prop of its own. It takes an object ref or a callback ref, and a callback returning a cleanup function is supported.
+- **`fetchpriority` is lowercase in the DOM.** The rendered attribute is `fetchpriority`, so style and query it under that name. In JSX pass the camel-case `fetchPriority` - the lowercase alias is removed from the props type to keep the two from clashing.
+- **`style` is an object.** The placeholder background is merged into it, so the string form of Preact's `style` is not accepted.
+- To reset the placeholder for a new source, remount with a `key`:
+
+  ```jsx
+  <Image
+    key={photo.src.url}
+    alt={photo.alt}
+    src={photo.src}
+    srcSet={photo.srcSet}
+    placeholder={photo.placeholder}
+  />
+  ```
+
+</TabItem>
+<TabItem label="Svelte">
+
+#### Picture props
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `srcSet` | `SrcSetEntry[]` | Variants to render the `<source>` elements from, grouped by mime type and ordered by format efficiency. Required. |
+| `sizes` | `string` | `sizes` for every generated `<source>`. Should match the `sizes` of the `<img>`. |
+| `children` | `Snippet` | Content of the `<picture>`, required: it must contain an `<img>`. |
+
+Every other prop goes to the `<picture>` element - `class`, `style`, `id`, event handlers.
+
+#### Image props
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `src` | `SrcSetEntry` | Variant for the `src` attribute and the intrinsic size. |
+| `srcSet` | `SrcSetEntry[] \| string` | Variants for the `srcset` attribute, filtered to the format of `src` - or a ready `srcset` string, used as it is. |
+| `placeholder` | `string` | Data-url shown as a background until the image loads. |
+| `priority` | `boolean` | Eager loading and `fetchpriority="high"`. |
+| `ref` | `HTMLImageElement \| null` | The `<img>` element, bindable. |
+
+Every other prop goes to the `<img>`: `alt`, `sizes`, `class`, `style`, `onload` and the rest. `loading` defaults to `lazy` and `decoding` to `async`; both, and an explicit `width` / `height` pair, override the defaults.
+
+#### Svelte specifics
+
+- **Runes.** The components are written with `$props`, `$state`, `$derived` and `$bindable`, so they need Svelte 5 in runes mode.
+- **Element-style prop names.** Attributes keep the names they have in Svelte markup: `class`, a `style` string, `onload`, `fetchpriority`.
+- **`bind:ref` for the element.** The `ref` prop is bindable, so the `<img>` comes back through a binding:
+
+  ```svelte
+  <script>
+    let element = $state(null)
+  </script>
+
+  <Image bind:ref={element} {src} alt="A cat on a windowsill"/>
+  ```
+
+- To reset the placeholder for a new source, remount the component with a `{#key}` block:
+
+  ```svelte
+  {#key photo.src.url}
+    <Image
+      alt={photo.alt}
+      src={photo.src}
+      srcSet={photo.srcSet}
+      placeholder={photo.placeholder}
+    />
+  {/key}
+  ```
+
+</TabItem>
+</Tabs>

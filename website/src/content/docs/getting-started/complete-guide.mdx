@@ -1,0 +1,328 @@
+---
+title: Complete Guide
+description: Set up srcset end to end - install, configure the rules, wire the types, render the variants and check the result.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem, Aside, Steps, CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+One walkthrough, top to bottom, ending with a `<picture>` that carries every generated variant. Pick your bundler and your framework in the tabs - the choice is remembered down the page. The [cli](/integrations/cli/) is the third way in: it takes the same rules from a config file and needs no bundler at all.
+
+## 1. Install
+
+<Tabs syncKey="bundler">
+  <TabItem label="Vite">
+    <Tabs syncKey="package-manager">
+      <TabItem label="pnpm">
+        ```sh frame="none"
+        pnpm add -D @srcset/vite-plugin
+        pnpm add @srcset/runtime @srcset/react
+        ```
+      </TabItem>
+      <TabItem label="yarn">
+        ```sh frame="none"
+        yarn add -D @srcset/vite-plugin
+        yarn add @srcset/runtime @srcset/react
+        ```
+      </TabItem>
+      <TabItem label="npm">
+        ```sh frame="none"
+        npm i -D @srcset/vite-plugin
+        npm i @srcset/runtime @srcset/react
+        ```
+      </TabItem>
+    </Tabs>
+  </TabItem>
+  <TabItem label="Webpack and Rspack">
+    <Tabs syncKey="package-manager">
+      <TabItem label="pnpm">
+        ```sh frame="none"
+        pnpm add -D @srcset/loader
+        pnpm add @srcset/runtime @srcset/react
+        ```
+      </TabItem>
+      <TabItem label="yarn">
+        ```sh frame="none"
+        yarn add -D @srcset/loader
+        yarn add @srcset/runtime @srcset/react
+        ```
+      </TabItem>
+      <TabItem label="npm">
+        ```sh frame="none"
+        npm i -D @srcset/loader
+        npm i @srcset/runtime @srcset/react
+        ```
+      </TabItem>
+    </Tabs>
+  </TabItem>
+</Tabs>
+
+`@srcset/runtime` is a peer dependency of the integrations and of the components: it carries the `SrcSetEntry` type and the helpers that turn variants into DOM attributes. It and the components ship code the app runs, so both belong in the regular dependencies; the integration itself never leaves the build. Swap `@srcset/react` for `@srcset/preact` or `@srcset/svelte`, or skip it and build the markup with the runtime helpers, as shown in step 5.
+
+## 2. Configure the integration
+
+<Tabs syncKey="bundler">
+  <TabItem label="Vite">
+    ```js title="vite.config.js"
+    import { defineConfig } from 'vite'
+    import { srcset } from '@srcset/vite-plugin'
+
+    export default defineConfig({
+      plugins: [
+        srcset({
+          rules: [
+            // Png keeps its transparency, webp is the smaller twin.
+            {
+              match: '**/*.png',
+              width: [1, 0.5],
+              format: ['png', 'webp']
+            },
+            // Everything else: jpg for the reach, webp and avif for the size.
+            {
+              width: [1, 0.5],
+              format: ['jpg', 'webp', 'avif']
+            }
+          ],
+          placeholder: true
+        })
+      ]
+    })
+    ```
+
+    Every raster image import - jpg, jpeg, png, webp, avif, gif - goes through the plugin from now on. Native Vite queries such as `?url` and `?raw` stay in the asset pipeline, and `.svg` imports are not touched at all.
+  </TabItem>
+  <TabItem label="Webpack and Rspack">
+    ```js title="webpack.config.js / rspack.config.js"
+    export default {
+      module: {
+        rules: [
+          {
+            test: /\.(jpe?g|png|gif)$/i,
+            use: {
+              loader: '@srcset/loader',
+              options: {
+                rules: [
+                  // Png keeps its transparency, webp is the smaller twin.
+                  {
+                    match: '**/*.png',
+                    width: [1, 0.5],
+                    format: ['png', 'webp']
+                  },
+                  // Everything else: jpg for the reach, webp and avif for the size.
+                  {
+                    width: [1, 0.5],
+                    format: ['jpg', 'webp', 'avif']
+                  }
+                ],
+                placeholder: true
+              }
+            }
+          }
+        ]
+      }
+    }
+    ```
+
+    The `test` decides which extensions the loader takes, so keep `.svg` out of it. The loader replaces whatever asset rule the project had for those extensions - remove a competing `type: 'asset/resource'` rule for the same test, or the two will fight over the same files.
+  </TabItem>
+</Tabs>
+
+What the two rules say:
+
+- rules are tried in order and **the first match wins**, so the png rule has to come before the general one;
+- the second rule has no `match`, which makes it the **catch-all**, and a catch-all belongs last;
+- `width: [1, 0.5]` is the original width and a half-width copy - a value of 1 or less is a multiplier, anything above it is absolute pixels;
+- `placeholder: true` adds a 16px webp inlined as a data-url, for blur-up placeholders.
+
+<Aside type="caution" title="Every image needs a rule">
+  An image that no rule matched produces an **empty module** - default export `''`, `src` is `null`, `srcSet` is `[]` - and the page renders nothing at all. That is what the catch-all rule prevents.
+</Aside>
+
+The whole rule model - matchers, widths, formats, encoder options - is on the [Rules](/getting-started/rules/) page.
+
+## 3. Wire the types
+
+The integration ships ambient declarations for image imports. Reference them once, in a `.d.ts` of the project:
+
+<Tabs syncKey="bundler">
+  <TabItem label="Vite">
+    ```ts title="src/vite-env.d.ts"
+    /// <reference types="vite/client" />
+    /// <reference types="@srcset/vite-plugin/client" />
+    ```
+
+    The plugin declares only the named exports; the default url export comes from `vite/client`, so keep that line.
+  </TabItem>
+  <TabItem label="Webpack and Rspack">
+    ```ts title="src/env.d.ts"
+    /// <reference types="@srcset/loader/client" />
+    ```
+
+    The loader declares the default url export as well, so this one line is enough.
+  </TabItem>
+</Tabs>
+
+Without the reference the named imports fail to type-check with `Module '"*.jpg"' has no exported member 'srcSet'`.
+
+## 4. Import an image
+
+```ts
+import url, { src, srcSet, srcMap, placeholder } from './photo.jpg'
+```
+
+| Export | Type | When to use it |
+| --- | --- | --- |
+| `default` | `string` | The url of the selected variant, e.g. `/assets/photo-BsK7yzuP.jpg`. A drop-in replacement for a plain asset import. |
+| `src` | `SrcSetEntry` | The selected variant, with `format`, `type`, `width`, `height` and `url` - the intrinsic size that keeps the layout from shifting. |
+| `srcSet` | `SrcSetEntry[]` | Every generated variant, for the `srcset` attribute and the `<source>` elements. |
+| `srcMap` | `Record<string, string>` | Id to url, e.g. `srcMap.webp800`. For one specific variant: a css background, an `og:image`, an email template. |
+| `placeholder` | `string \| undefined` | The blur-up data-url, when the `placeholder` option is on. |
+
+The default export points at the variant in the **source format at the source width** when the rules produced one, and at the first generated variant otherwise. Point it elsewhere with the `select` option or the import query - see [Image modules](/getting-started/image-modules/).
+
+## 5. Render it
+
+The components build the `<picture>` structure, order the sources by format efficiency and handle the placeholder:
+
+<Tabs syncKey="framework">
+  <TabItem label="React">
+    ```jsx title="src/Hero.jsx"
+    import { Picture, Image } from '@srcset/react'
+    import { src, srcSet, placeholder } from './photo.jpg'
+
+    const sizes = '(max-width: 48rem) 100vw, 48rem'
+
+    export function Hero() {
+      return (
+        <Picture srcSet={srcSet} sizes={sizes}>
+          <Image
+            alt='A cat on a windowsill'
+            src={src}
+            srcSet={srcSet}
+            placeholder={placeholder}
+            sizes={sizes}
+          />
+        </Picture>
+      )
+    }
+    ```
+  </TabItem>
+  <TabItem label="Preact">
+    ```jsx title="src/Hero.jsx"
+    import { Picture, Image } from '@srcset/preact'
+    import { src, srcSet, placeholder } from './photo.jpg'
+
+    const sizes = '(max-width: 48rem) 100vw, 48rem'
+
+    export function Hero() {
+      return (
+        <Picture srcSet={srcSet} sizes={sizes}>
+          <Image
+            alt='A cat on a windowsill'
+            src={src}
+            srcSet={srcSet}
+            placeholder={placeholder}
+            sizes={sizes}
+          />
+        </Picture>
+      )
+    }
+    ```
+
+    The element ref has a prop of its own here, `imgRef` - plain Preact does not forward `ref` to function components.
+  </TabItem>
+  <TabItem label="Svelte">
+    ```svelte title="src/Hero.svelte"
+    <script>
+      import { Picture, Image } from '@srcset/svelte'
+      import { src, srcSet, placeholder } from './photo.jpg'
+
+      const sizes = '(max-width: 48rem) 100vw, 48rem'
+    </script>
+
+    <Picture {srcSet} {sizes}>
+      <Image
+        alt="A cat on a windowsill"
+        {src}
+        {srcSet}
+        {placeholder}
+        {sizes}
+      />
+    </Picture>
+    ```
+
+    The element ref is `bind:ref`, and `style` is a string rather than an object.
+  </TabItem>
+</Tabs>
+
+Three things this snippet is careful about:
+
+- `srcSet` and `sizes` are set on **both** elements: the `sizes` of the `<img>` does not apply to a `<source>` the browser has picked, and an `<img>` without `srcSet` is left with one fixed url.
+- `Picture` needs an `<img>` child - a `<picture>` without one renders nothing.
+- `Image` takes the intrinsic `width` and `height` from `src`, so nothing shifts while the image loads.
+
+Without a components package the same markup comes from two runtime helpers:
+
+```jsx title="src/Hero.jsx"
+import { getImageProps, getSourceProps } from '@srcset/runtime'
+import { src, srcSet } from './photo.jpg'
+
+const sizes = '(max-width: 48rem) 100vw, 48rem'
+
+export function Hero() {
+  return (
+    <picture>
+      {getSourceProps(srcSet).map(source => (
+        <source
+          key={source.type}
+          type={source.type}
+          srcSet={source.srcSet}
+          sizes={sizes}
+        />
+      ))}
+      <img
+        {...getImageProps(src, srcSet)}
+        sizes={sizes}
+        width={src.width}
+        height={src.height}
+        alt='A cat on a windowsill'
+      />
+    </picture>
+  )
+}
+```
+
+`getSourceProps` groups the variants by mime type and orders the groups avif, webp, then the rest, so the browser takes the best format it supports. `getImageProps` builds the `srcset` of the `<img>` from the variants of the `src` format only - the fallback for a browser that skipped every `<source>`.
+
+## 6. Verify
+
+<Steps>
+
+1. **Build the project** and look at the emitted assets: the extra formats and widths have to be there, not just the originals.
+
+   <Tabs syncKey="bundler">
+     <TabItem label="Vite">
+       They land in `dist/assets`. The second build is much faster - variants are cached on disk in `node_modules/.vite/srcset`, and the cache is on by default.
+     </TabItem>
+     <TabItem label="Webpack and Rspack">
+       They land wherever `output.path` points, named by the loader's `name` template. Repeated builds ride the bundler's own persistent cache; the loader's disk cache is off by default and turned on with `cache: true`.
+     </TabItem>
+   </Tabs>
+
+2. **Log the variants** the module carries:
+
+   ```ts
+   import { srcSet } from './photo.jpg'
+
+   console.log(srcSet.length, srcSet.map(variant => variant.id))
+   // 6 [ 'jpg1600', 'jpg800', 'webp1600', 'webp800', 'avif1600', 'avif800' ]
+   ```
+
+   The count is widths times formats - six for the rule above, here on a 1600px wide source. A `0` means no rule matched the image.
+
+3. **Check the rendered markup**: a `<picture>` with one `<source>` per format and an `<img>` with a `srcset` of the fallback format, or - without the components - an `<img>` whose `srcset` lists every width.
+
+4. **Type-check** with `tsc --noEmit`, so a missing ambient reference does not survive until the next build.
+
+</Steps>

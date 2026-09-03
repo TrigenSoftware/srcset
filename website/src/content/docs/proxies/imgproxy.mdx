@@ -1,0 +1,231 @@
+---
+title: imgproxy
+description: "@srcset/imgproxy: building variant urls for an imgproxy instance - presets, signing, passthrough and the EXIF and upscaling rules."
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+[imgproxy](https://imgproxy.net/) is a self-hosted image server: it takes a url describing what to do and the source image to do it to, fetches the source, and returns the processed image. `@srcset/imgproxy` is the url builder for it - it turns a content image and a rule into the [same srcset object](/proxies/) the bundler integrations produce.
+
+The package builds strings and nothing else, so it runs anywhere: a server render, a route handler, the browser. Only the signing entry point is Node-only.
+
+## Install
+
+`@srcset/runtime` is a peer dependency: it carries the `SrcSetEntry` type and the helpers that turn variants into DOM attributes. Both packages run in the browser, so both are regular dependencies rather than dev ones.
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add @srcset/imgproxy @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add @srcset/imgproxy @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i @srcset/imgproxy @srcset/runtime
+    ```
+  </TabItem>
+</Tabs>
+
+## Usage
+
+Create the builder once and export it - it is stateless, so one instance serves the whole app:
+
+```ts title="imgproxy.ts"
+import { Imgproxy } from '@srcset/imgproxy'
+
+export const imgproxy = new Imgproxy({
+  endpoint: 'https://imgproxy.example.com'
+})
+```
+
+Then build an image per render:
+
+```ts
+import { imgproxy } from './imgproxy.ts'
+
+const { url, src, srcSet, srcMap } = imgproxy.image(photo.url, {
+  width: [600, 1200],
+  format: ['jpg', 'webp']
+})
+```
+
+Four variants come back - two widths in each of the two formats - with `src` pointing at `jpg1200`, the source format at the largest width:
+
+```ts
+srcMap.webp600 // https://imgproxy.example.com/insecure/w:600/f:webp/aHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vcGhvdG8uanBn
+```
+
+See [Image proxies](/proxies/) for the object's fields and how to render it, and for the rule semantics the two adapters share.
+
+## Options
+
+| Option | Description |
+| --- | --- |
+| `endpoint` | imgproxy endpoint url. Required. A trailing slash is trimmed. |
+| `processing` | Builder of the processing path segment. Defaults to `w:{width}/f:{format}`. |
+| `quality` | Quality for the default processing builder: adds `q:{quality}` to the segment. |
+| `signer` | Url path signer, e.g. from [`sign`](#signing). Without one the urls carry the `insecure` signature. |
+| `passthrough` | Return the source urls untouched instead of building imgproxy urls. |
+
+The rule passed to `image(sourceUrl, rule)`:
+
+| Field | Description |
+| --- | --- |
+| `width` | Absolute output width(s) in pixels. Integers greater than 1 - a multiplier throws. |
+| `format` | Output format(s). Defaults to the source url file extension, which is also the `src` fallback. |
+
+## How the url is built
+
+```
+{endpoint}/{signature}/{processing}/{base64url source url}
+```
+
+```
+https://imgproxy.example.com/insecure/w:600/f:webp/aHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vcGhvdG8uanBn
+```
+
+- **Signature** - the output of `signer`, or the literal `insecure` when there is none.
+- **Processing** - whatever `processing` returned for this variant. The default builder writes `w:{width}/f:{format}`, plus `/q:{quality}` when the `quality` option is set. Options are separated by slashes, so a builder can return several of them.
+- **Source url** - always base64url-encoded: the plain form would need escaping for query strings, `%` and `@` signs and non-ascii characters, and the encoded form has none of those problems. Multi-byte characters survive it - `https://cms.example.com/медиа/фото.jpg` encodes and decodes intact.
+
+The endpoint may be a bare origin or an origin with a path prefix; the builder only trims a trailing slash before joining.
+
+## Output formats
+
+The rule's `format` names go into `f:` as they are, so imgproxy has to be able to save them: `jpg`, `png`, `webp`, `avif`, `gif`.
+
+Without `format`, the output format is read from the **source url extension**: only the path is inspected, so a query string never confuses it, `.jpeg` normalizes to `jpg`, and an unrecognized or missing extension falls back to `jpg`.
+
+Svg is the exception in both directions. A `.svg` source has no raster output format to keep, so the default becomes `jpg` - imgproxy rasterizes it. And `svg` requested as an output format is skipped, because a photo cannot be converted into vector: `format: ['webp', 'svg']` silently builds the webp variants only, and `format: 'svg'` builds nothing and throws.
+
+## Presets
+
+`processing` replaces the default segment builder. Its main use is imgproxy [presets](https://docs.imgproxy.net/usage/presets): named sets of options configured on the server, referenced from the url by name.
+
+```ts
+const imgproxy = new Imgproxy({
+  endpoint: 'https://imgproxy.example.com',
+  processing: ({ format, width }) => `pr:card_${format}_${width}`
+})
+```
+
+```
+https://imgproxy.example.com/insecure/pr:card_webp_600/aHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vcGhvdG8uanBn
+```
+
+The url now says which preset to apply and nothing about how. The sharpening, the gravity, the background for transparent sources, the quality per format - all of that lives in the imgproxy configuration, and changing it does not require a redeploy of the front end. It also removes the option grammar from the public url, which is what makes [browser-built urls](#building-urls-in-the-browser) safe without a signature.
+
+The hook is not limited to presets - it returns the whole segment, so any imgproxy option grammar works:
+
+```ts
+const imgproxy = new Imgproxy({
+  endpoint: 'https://imgproxy.example.com',
+  processing: ({ format, width }) => `rs:fill:${width}:${Math.round(width * 9 / 16)}/g:sm/f:${format}`
+})
+```
+
+<Aside type="caution" title="A custom builder owns the whole segment">
+  `quality` feeds the default builder only. With a `processing` hook in place the option is ignored, and the quality has to come from the returned segment or from the preset.
+</Aside>
+
+## Signing
+
+When imgproxy runs with a key and a salt configured, it accepts only signed urls. `@srcset/imgproxy/sign` builds the signer:
+
+```ts title="imgproxy.ts"
+import { Imgproxy } from '@srcset/imgproxy'
+import { sign } from '@srcset/imgproxy/sign'
+
+const {
+  IMGPROXY_KEY,
+  IMGPROXY_SALT
+} = process.env
+
+if (!IMGPROXY_KEY || !IMGPROXY_SALT) {
+  throw new Error('imgproxy key and salt are not configured')
+}
+
+export const imgproxy = new Imgproxy({
+  endpoint: 'https://imgproxy.example.com',
+  signer: sign({
+    key: IMGPROXY_KEY,
+    salt: IMGPROXY_SALT
+  })
+})
+```
+
+The signature is the HMAC-SHA256 of the salt followed by the url path - everything from the slash after the signature to the end - encoded as base64url, exactly what imgproxy expects. The key and the salt are hex strings, as imgproxy takes them; anything that is not a non-empty hex string throws instead of being silently truncated to a weaker key.
+
+<Aside type="danger" title="Never sign in the browser">
+  The signer entry point imports `node:crypto`, so it is server-side by design - keep it that way. A key and a salt bundled into client code turn the instance into an open image resizer for anyone who reads the bundle. Build the srcset object during the server render and serialize it to the client: it is plain JSON. With no server to build it on, leave the urls unsigned and lock the instance down instead - the next section.
+</Aside>
+
+Without a `signer` every url carries the literal `insecure` where the signature goes. imgproxy checks signatures only when `IMGPROXY_KEY` and `IMGPROXY_SALT` are both set: with neither of them that position may hold any string and the url is accepted, with them an unsigned url is rejected.
+
+## Building urls in the browser
+
+Signing needs a secret and a secret cannot ship to the client, so a url built in the browser is always unsigned. That is not unsafe in itself - it is unsafe while the url is a free-form instruction to the server. Take the instruction away and there is nothing left to forge, which is the answer for a static site or an spa with no bff to sign on.
+
+**Presets-only mode.** [`IMGPROXY_ONLY_PRESETS=true`](https://docs.imgproxy.net/configuration/options#IMGPROXY_ONLY_PRESETS) makes imgproxy accept preset names as the processing options and nothing else; the widths, formats and qualities live in `IMGPROXY_PRESETS` on the server. A url can then ask for one of your presets, and not for a fifty megapixel avif at quality 100 in a loop:
+
+```ts
+export const imgproxy = new Imgproxy({
+  endpoint: 'https://imgproxy.example.com',
+  processing: ({ format, width }) => `pr:card_${format}_${width}`
+})
+```
+
+The rule is still a cross product, so every format and width pair of the ladder needs a preset of its own - presets-only mode leaves no room for a `w:` next to the `pr:`.
+
+**A source whitelist.** [`IMGPROXY_ALLOWED_SOURCES`](https://docs.imgproxy.net/configuration/options#IMGPROXY_ALLOWED_SOURCES) is a comma-separated list of allowed source url prefixes, `*` accepted as a wildcard. Set it to your own cdn and the instance stops being an open resizer for the whole internet - bandwidth you pay for, on content you did not choose to serve.
+
+**Ceilings on one request.** [`IMGPROXY_MAX_SRC_RESOLUTION`](https://docs.imgproxy.net/configuration/options#IMGPROXY_MAX_SRC_RESOLUTION) (megapixels, 50 by default) and [`IMGPROXY_MAX_SRC_FILE_SIZE`](https://docs.imgproxy.net/configuration/options#IMGPROXY_MAX_SRC_FILE_SIZE) (bytes, unlimited by default) bound the work for a source that did pass the whitelist.
+
+The three together leave exactly your images by your presets: a finite set of urls, every one of them cacheable, so a cdn in front of the instance absorbs a flood instead of the encoder doing the same work again. That is the property signing buys - a bounded set of accepted urls - reached through configuration instead of a secret.
+
+They are not equivalent. A signature proves your server minted that exact url, so the valid set is precisely what you built; presets-only mode allows any of your presets over any allowed source, which is a larger set. Sign wherever there is a server render or a route handler to sign in, and use this where there is not.
+
+## Passthrough
+
+```ts
+export const imgproxy = new Imgproxy({
+  endpoint: 'https://imgproxy.example.com',
+  passthrough: import.meta.env.DEV
+})
+```
+
+`url` and `src` carry the untouched source url, `srcSet` and `srcMap` come back empty, and neither `processing` nor `signer` is called - so a development build needs no instance running and no keys in the environment. The rule is still validated, so a bad width fails on the first render rather than after deployment.
+
+One detail worth knowing: in passthrough the `src` keeps the *source* format, svg included, since the url is the original file. Its `width` is still the largest requested one, which is now a claim about an image nobody resized.
+
+## EXIF orientation
+
+imgproxy auto-rotates by the EXIF `Orientation` tag before doing anything else - it does that by default, and nothing in this package asks for anything else. Phone cameras use the tag constantly: a portrait shot is stored as a landscape pixel buffer plus "rotate 90°", and the browser applies the tag when it renders the file directly.
+
+Two consequences for the rules here:
+
+- **The widths apply to the rotated image.** For a 4000x3000 buffer tagged as rotated, imgproxy resizes a 3000x4000 image, and `width: 1200` gives a 1200x1600 portrait variant. Check the ladder against the orientation the visitor sees, not against the dimensions stored in the file.
+- **The upscaling limit follows the rotated width too.** A 4000px buffer that is really 3000px wide once rotated tops out at 3000, not 4000 - see below.
+
+The variants come back without the metadata - imgproxy strips it unless the instance is configured to keep it - which is the right outcome: the pixels are already rotated, so a browser must not rotate them a second time. It also means nothing downstream can undo a wrong assumption - if a CMS reports the stored dimensions rather than the displayed ones, swap them when the orientation tag says the image is rotated.
+
+## Widths and enlarging
+
+imgproxy's `enlarge` option is off unless the url asks for it, and neither the default builder nor anything else in this package sets it. A width above the source width therefore returns the source unchanged - while the variant keeps the requested width in its `id` and in its `w` descriptor.
+
+That descriptor is what the browser picks candidates by, so an inflated one makes it choose a small image for a large slot and scale it up. Keep the rule widths within the source width, clamping against the dimensions the CMS reports where possible - the [overview page](/proxies/#descriptors-and-upscaling) has the pattern.
+
+## Pitfalls
+
+- **Multiplier widths throw.** `width: [1, 0.5]` is valid in a build-time rule and invalid here: nothing knows the source size at runtime. Fractional and non-finite widths throw as well.
+- **The fallback format comes from the url extension.** `src` is the variant of the source format, or of the first format of the list when the source format is not in it - and a url with no usable extension counts as jpg.
+- **`svg` as an output format is dropped without a word**, and a rule whose formats are all svg throws `No image variants`.
+- **A `processing` hook disables the `quality` option** - it builds the whole segment itself.
+- **imgproxy must be able to reach the source url.** The adapter encodes whatever url it is given; a CMS behind auth, or a host outside the instance's allowed sources, fails at the proxy, not here.

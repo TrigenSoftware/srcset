@@ -1,0 +1,44 @@
+---
+title: srcset
+description: Highly customizable tools for generating responsive images - build-time generation, image proxy adapters and framework components, without vendor and server lock-in.
+template: splash
+editUrl: false
+hero:
+  tagline: One import, every variant. Resize and convert images at build time, and render a real srcset instead of one fixed file.
+  image:
+    dark: ../../assets/srcset-dark.svg
+    light: ../../assets/srcset-light.svg
+  actions:
+    - text: Get Started
+      link: /getting-started/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/TrigenSoftware/srcset
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components'
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Widths and modern formats" icon="seti:image">
+    Resize for screen sizes and densities, convert to [WebP](https://developers.google.com/speed/webp) and [Avif](https://jakearchibald.com/2020/avif-has-landed/), and keep a widely supported fallback. Encoded with [sharp](https://sharp.pixelplumbing.com/).
+  </Card>
+  <Card title="Tree-shakable image modules" icon="puzzle">
+    An image import becomes a module carrying every variant, and only what you use reaches the bundle.
+  </Card>
+  <Card title="Vite, Webpack and Rspack" icon="rocket">
+    Integrations for the modern bundlers, with a variant cache that keeps repeated builds fast.
+  </Card>
+  <Card title="Bake it and drop the integration" icon="seti:powershell">
+    The cli [bakes](/integrations/baking/) the variants plus an ES module importing them, so a project can commit the result and build without any bundler plugin.
+  </Card>
+  <Card title="Components, not markup by hand" icon="seti:html">
+    Ready `Picture` and `Image` components for React, Preact and Svelte.
+  </Card>
+  <Card title="Content images too" icon="cloud-download">
+    Images from an API or a CMS never reach your build. The [imgproxy](https://imgproxy.net/) and [Cloudflare](https://developers.cloudflare.com/images/) adapters build the same variant objects at runtime.
+  </Card>
+</CardGrid>

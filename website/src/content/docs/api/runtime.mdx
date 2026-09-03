@@ -1,0 +1,174 @@
+---
+title: Runtime
+description: '@srcset/runtime: the SrcSetEntry shape, attribute builders for img and source elements, and the srcset string helpers.'
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+`@srcset/runtime` is the only part of srcset that reaches the browser: it turns generated variants into DOM attributes. Zero dependencies, tree-shakable, and the whole public surface is tested against a 1 kB budget.
+
+Everything else in the project speaks its language: the [image modules](/getting-started/image-modules/) of the bundler integrations, the [baked modules](/integrations/baking/) of the cli and the [proxy adapters](/proxies/) all produce arrays of `SrcSetEntry`, and the [framework components](/components/) are built on the two functions below.
+
+Install it as a regular dependency, not a dev one - it ships:
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i @srcset/runtime
+    ```
+  </TabItem>
+</Tabs>
+
+## SrcSetEntry
+
+One generated image variant:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | `string` | Id of the variant: the format plus the width by default, e.g. `webp600`. The key under which the variant sits in [`srcMap`](/getting-started/image-modules/); a build-time integration can change the scheme with `resourceId`. |
+| `format` | `ImageFormat` | `avif`, `webp`, `jpg`, `png`, `gif` or `svg`. |
+| `type` | `string` | Mime type of the variant, e.g. `image/webp`. What the `<source>` grouping runs on. |
+| `width` | `number` | Width in pixels. Becomes the `w` descriptor. |
+| `height` | `number \| undefined` | Height in pixels. **Optional**: a build-time variant knows it, a runtime-built one - an imgproxy or Cloudflare url - does not. |
+| `url` | `string` | Url of the variant. |
+
+```ts
+import type { SrcSetEntry } from '@srcset/runtime'
+```
+
+The `srcSet` export of an [image module](/getting-started/image-modules/) is a `SrcSetEntry[]`, and its `src` export is the one entry the module selected for the `<img>` - by default the variant matching the source format and width, or the first generated one when there is no such variant.
+
+## getImageProps
+
+```ts
+getImageProps(
+  src: SrcSetEntry | undefined,
+  srcSet: SrcSetEntry[] | string | undefined
+): ImageSrcProps
+```
+
+Builds the two attributes of an `<img>` - the exported `ImageSrcProps` is `{ src?: string, srcSet?: string }`, both optional:
+
+```js
+import { getImageProps } from '@srcset/runtime'
+import { src, srcSet } from './photo.jpg'
+
+getImageProps(src, srcSet)
+// {
+//   src: '/photo.jpg',
+//   srcSet: '/photo.jpg 1200w, /photo@600w.jpg 600w'
+// }
+```
+
+The `srcSet` string holds **only the variants of the `src` format**. A single `<img>` gets one `srcset` attribute, and a browser picks a candidate from it by width alone - mixing formats in there would hand avif to a browser that cannot decode it. Formats belong in `<source>` elements, which is what [`getSourceProps`](#getsourceprops) is for.
+
+The rest of the behaviour:
+
+- **A `srcSet` that would duplicate `src` is omitted.** With one variant of the `src` format there is nothing to choose from, so the result is just `{ src }` and the markup stays clean.
+- **A ready string passes through.** `getImageProps(src, '/photo.jpg 1x, /photo@2x.jpg 2x')` returns it untouched as the `srcSet`, next to the `src` url, which is how a component accepts both an array and a hand-written `srcset`.
+- **Without `src`** the whole set becomes the `srcSet` string, formats included - for a `<source>`-like case where the caller has already narrowed the set.
+- **Without either** the result is an empty object, so nothing is rendered rather than an `src=""` that requests the current page.
+
+<Aside type="caution">
+An empty `{}` is what an [unmatched image](/getting-started/rules/) looks like on the page: no rule matched it, the module carries `src: null` and `srcSet: []`, and the image silently disappears. Check the rules before debugging the markup.
+</Aside>
+
+## getSourceProps
+
+```ts
+getSourceProps(srcSet: SrcSetEntry[]): { type: string, srcSet: string }[]
+```
+
+Builds the `<source>` elements of a `<picture>`, one per mime type:
+
+```js
+getSourceProps(srcSet)
+// [
+//   { type: 'image/avif', srcSet: '/photo.avif 1200w, /photo@600w.avif 600w' },
+//   { type: 'image/webp', srcSet: '/photo.webp 1200w, /photo@600w.webp 600w' },
+//   { type: 'image/jpeg', srcSet: '/photo.jpg 1200w, /photo@600w.jpg 600w' }
+// ]
+```
+
+Two things happen there, and both matter.
+
+**Grouping by `type`.** A browser picks the first `<source>` whose `type` it can decode, then chooses a candidate from that source's `srcset` by width. So one `<source>` per format, each carrying every width of that format.
+
+**Ordering by format efficiency.** Avif first, then webp, then every other mime type in the order it appeared in the array. The browser takes the *first* source it can decode and never looks further, so the order in the markup is the preference: a browser without avif falls to webp, one without either falls through to the `<img>`. The format order of the generation rule does not carry over here - avif and webp are hoisted to the front wherever they sat in it.
+
+Put together, by hand:
+
+```jsx title="Photo.jsx"
+import { getImageProps, getSourceProps } from '@srcset/runtime'
+import { src, srcSet } from './photo.jpg'
+
+const sizes = '(max-width: 48rem) 100vw, 48rem'
+
+export function Photo() {
+  return (
+    <picture>
+      {getSourceProps(srcSet).map(source => (
+        <source
+          key={source.type}
+          {...source}
+          sizes={sizes}
+        />
+      ))}
+      <img
+        {...getImageProps(src, srcSet)}
+        sizes={sizes}
+        alt='A photo'
+      />
+    </picture>
+  )
+}
+```
+
+<Aside>
+`sizes` goes on the `<source>` elements as well as the `<img>`: the `sizes` of the `<img>` does not apply to a `<source>` the browser selected. And a `<picture>` renders nothing without a child `<img>` - the sources only describe the candidates for it.
+
+The [framework components](/components/) do all of this, including the placeholder and the priority hints. Reach for these functions when there is no component for your framework.
+</Aside>
+
+## String helpers
+
+```ts
+toSrcSetString(srcSet: SrcSetEntry[]): string
+toDensitySrcSetString(srcSet: SrcSetEntry[]): string
+```
+
+`toSrcSetString` builds the `srcset` value with **width descriptors** - `url 1200w, url 600w` - which is what both functions above use. A set of one returns the bare url with no descriptor: a single candidate is not a choice, and a lone `w` descriptor would drag `sizes` along with it.
+
+`toDensitySrcSetString` builds it with **pixel density descriptors** instead, computed from the variant widths relative to the smallest one and rounded to two decimals:
+
+```js
+import { filterBy, toDensitySrcSetString } from '@srcset/runtime'
+
+toDensitySrcSetString(filterBy(srcSet, 'format', 'jpg'))
+// '/photo.jpg 2x, /photo@600w.jpg 1x'
+```
+
+Use it for images of a fixed display size - a logo, an avatar, an icon - where the layout width is known and width descriptors would need a `sizes` attribute to say what it is. Pass one format at a time, the same way `getImageProps` does.
+
+## Utilities
+
+| Function | Description |
+| --- | --- |
+| `groupBy(srcSet, field)` | Group entries by a field into `[value, entries]` pairs, keeping the original order inside every group and between the groups. |
+| `filterBy(srcSet, field, value)` | Entries whose field equals the value, e.g. one format out of a mixed set. |
+
+Both are typed against `SrcSetEntry`, so `field` autocompletes and `value` is checked against that field's type.
+
+`mimeTypes` maps a format to its mime type - `avif`, `webp`, `jpg`, `png`, `gif`, `svg` to `image/avif`, `image/webp`, `image/jpeg`, `image/png`, `image/gif`, `image/svg+xml` - and `ImageFormat` is the union of those six names. They are the browser-side copies of the ones in [`@srcset/core`](/api/core/#formats), so nothing pulls sharp into a bundle.

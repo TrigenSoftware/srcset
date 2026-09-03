@@ -1,0 +1,375 @@
+---
+title: Core
+description: '@srcset/core: the image generator, the disk cache storage, matching, metadata, formats and path helpers behind every build-time integration.'
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+`@srcset/core` is the image processing engine: it resizes, converts and optimizes images with [sharp](https://sharp.pixelplumbing.com/). The [Vite plugin](/integrations/vite-plugin/), the [loader](/integrations/loader/) and the [cli](/integrations/cli/) are wrappers around it, and those are the normal entry points.
+
+Use the package directly when there is no integration to wrap it for you: a static site generator, an asset script, a plugin for another bundler, a test fixture builder.
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add -D @srcset/core
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add -D @srcset/core
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i -D @srcset/core
+    ```
+  </TabItem>
+</Tabs>
+
+The package is ESM-only and needs Node 22 or newer.
+
+## SrcSetGenerator
+
+The generator takes a source file and yields the variants, one object per generated file. Nothing is written to disk: what to do with the contents is up to the caller.
+
+```js title="generate.js"
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { SrcSetGenerator } from '@srcset/core'
+
+const generator = new SrcSetGenerator()
+const source = {
+  path: 'images/photo.jpg',
+  contents: await readFile('images/photo.jpg')
+}
+
+for await (const image of generator.generate(source, {
+  width: [1, 0.5, 320],
+  format: ['jpg', 'webp', 'avif']
+})) {
+  const target = join('dist', image.path)
+
+  await mkdir(dirname(target), {
+    recursive: true
+  })
+  await writeFile(target, image.contents)
+}
+```
+
+For a 3120 pixels wide source that writes nine files, every variant path keeping the directory of the source path:
+
+```
+dist/images/photo.jpg          3120w
+dist/images/photo@1560w.jpg    1560w
+dist/images/photo@320w.jpg      320w
+dist/images/photo.webp         3120w
+dist/images/photo@1560w.webp   1560w
+dist/images/photo@320w.webp     320w
+dist/images/photo.avif         3120w
+dist/images/photo@1560w.avif   1560w
+dist/images/photo@320w.avif     320w
+```
+
+### Constructor options
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `processing` | `ProcessingOptions` | [sharp output options](https://sharp.pixelplumbing.com/api-output/) per format. Merged onto [`defaultProcessing`](#defaults) format by format. |
+| `optimization` | `OptimizationOptions` | Custom optimizer functions per format, applied to the encoded contents. The only way to touch svg. |
+| `skipOptimization` | `boolean` | Pass a variant through unchanged when it needs no resize and already has the source format, and skip the custom optimizers. Defaults to `false`. |
+| `scalingUp` | `boolean` | Emit variants requested wider than the source, capped at the source width. Defaults to `true`. Pixels are never upscaled either way. |
+| `postfix` | `string \| PostfixFormatter` | Postfix for the variant file name. Defaults to [`defaultPostfix`](#defaults), which produces `@<width>w`. |
+| `concurrency` | `number` | Number of variants encoded at once. Defaults to `availableParallelism()`. Ignored when `limit` is set. |
+| `limit` | `LimitFunction` | A [p-limit](https://github.com/sindresorhus/p-limit) function, to share one concurrency budget between several generators. |
+| `cache` | `SrcSetCacheStorage` | [Disk cache storage](#srcsetcachestorage): repeated generation reads the stored variants instead of encoding them again. |
+
+### generate
+
+```ts
+generate(source: ImageSource, options?: GenerateOptions): AsyncGenerator<SrcSetImage>
+```
+
+`source` is `{ path, contents }`: a path string and a contents buffer, anything else throws a `TypeError`. The path is only used to name the variants and to match them - the file is never read from disk.
+
+`options` are the constructor options above, minus `concurrency`, `limit` and `cache`, plus the two that say what to generate:
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `format` | `ImageFormat \| ImageFormat[]` | Formats to convert to. Defaults to the source format. |
+| `width` | `number \| number[]` | Widths to resize to. A value less than or equal to 1 is a multiplier of the source width, above 1 it is absolute pixels. Defaults to `1`. |
+
+Every format is paired with every width, so `3` formats and `3` widths yield up to `9` variants. What happens around the edges:
+
+- Format names are normalized before use, so `jpeg` is `jpg` and `heif` is `avif`. An unsupported one throws `Unsupported image format: "tiff"`.
+- Widths must be finite and positive, and an absolute one must be an integer: `600.5` throws `Invalid width: 600.5`.
+- **Pixels are never upscaled.** A width above the source width resolves to the source width, and the postfix is built from the actual width: `5000` on a 3120 pixels wide source produces `photo@3120w.jpg`. With `scalingUp: false` such a variant is dropped instead.
+- Variants that resolve to the same file - same format, same postfix, same target width - are generated once. When both a multiplier and an absolute width land on that file, the multiplier wins, so `originMultiplier` survives.
+- **Svg is passed through, never resized or converted.** An svg source yields a single variant, its own contents with the `optimization.svg` optimizer applied, and only when `format` is unset or includes `svg`. A raster source with `format: 'svg'` yields nothing for it.
+- Animated sources keep their frames in `gif` and `webp` only. Converting to jpg, png or avif flattens them to the first frame.
+- Variants are encoded in parallel under the concurrency limit and yielded in the requested order.
+
+The source is auto-oriented before encoding: browsers honour the EXIF orientation and re-encoding drops the tag, so the pixels are rotated instead and every variant renders the same way.
+
+### generateAll
+
+```ts
+generateAll(source: ImageSource, rules: SrcSetRule[]): AsyncGenerator<SrcSetImage>
+```
+
+The same generation driven by [rules](/getting-started/rules/) - a `match` plus the generate options - which is what the integrations expose:
+
+```js
+for await (const image of generator.generateAll(source, [
+  {
+    match: '**/*.png',
+    width: [1, 0.5],
+    format: ['png', 'webp']
+  },
+  {
+    width: [1, 0.5],
+    format: ['jpg', 'webp', 'avif']
+  }
+])) {
+  // ...
+}
+```
+
+Rules are tried in order and the first matching one is the only one applied, unless it sets `fallthrough: true`. A rule without `match` matches every readable image, so it belongs last. Across fallthrough rules the same variant path is produced once - the first rule to reach it wins.
+
+An image no rule matched yields nothing at all, which is the usual reason an integration produces an empty module.
+
+### SrcSetImage
+
+Every yielded variant:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `path` | `string` | Variant file path: the source path with the postfix and the format extension applied. |
+| `contents` | `Buffer` | Encoded variant contents. |
+| `format` | `ImageFormat` | Normalized format of the variant. |
+| `width` | `number` | Actual width in pixels. |
+| `height` | `number` | Actual height in pixels. For an animated image, the height of a single frame. |
+| `postfix` | `string` | Postfix applied to the file name, e.g. `@1560w`. |
+| `originMultiplier` | `number \| null` | The multiplier the variant was requested with, or `null` for an absolute width. |
+| `cacheKey` | `string \| undefined` | Manifest key, set when the variant went through the [cache storage](#srcsetcachestorage). |
+
+## SrcSetCacheStorage
+
+A disk storage that memoizes the generation: a variant is written next to a manifest describing it, and a repeated run with the same source, options and variant reads it back instead of encoding it again. This is what makes the second build of a project fast.
+
+```js
+import { SrcSetGenerator, SrcSetCacheStorage } from '@srcset/core'
+
+const cache = new SrcSetCacheStorage({
+  dir: 'node_modules/.cache/srcset'
+})
+const generator = new SrcSetGenerator({
+  cache
+})
+
+// ... generate everything the build needs, then:
+
+await cache.prune()
+```
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `dir` | `string` | Directory to store the variants and their manifests in. Required. |
+| `maxAge` | `number` | Maximum age of an unused entry in milliseconds. Defaults to 30 days. |
+
+### How entries are addressed
+
+`getKey(context, variant)` returns the address of a variant - a manifest key and a stored file path - and it is derived from the inputs alone, so it is known before anything is encoded:
+
+```ts
+const { key, path } = cache.getKey(context, variant)
+```
+
+The key is a sha256 of the source contents, the posix form of the source path, the variant, the processing and optimization options, the postfix, `skipOptimization`, `scalingUp`, and an environment stamp made of the storage version and `sharp.versions`. Upgrading sharp to a version that encodes differently therefore invalidates the storage on its own.
+
+Function options, like custom optimizers and a postfix formatter, are serialized by their source text: editing an optimizer invalidates its entries. The flip side is that a postfix formatter must be pure - it is called repeatedly for the same variant, including for variants that end up skipped, and its output is part of the address.
+
+The storage is flat, so the key prefixes the file name - variant names are not unique across sources and options:
+
+```
+node_modules/.cache/srcset/
+  <key>.json                 manifest: path, usedAt, contents hash, format, width, height, postfix, originMultiplier
+  <key>-photo@320w.avif      the variant contents
+```
+
+`getStoredPath(key, name)` builds that second path, and `SrcSetImage.cacheKey` carries the key, which is how the Vite dev server serves variants straight from the storage instead of holding them in memory.
+
+### Methods
+
+| Method | Description |
+| --- | --- |
+| `getKey(context, variant)` | Address of a variant: `{ key, path }`. `variant` is `null` for the svg passthrough. |
+| `memo(context, variant, fn)` | Read the stored variant, or call `fn`, store the result and return it with `cacheKey` set. |
+| `prune()` | Remove the entries unused for longer than `maxAge`. |
+| `write(path, contents)` | Write a file to the storage, through a temporary file and an atomic rename. |
+| `read(path, encoding?)` | Read a stored file: a `Buffer`, or a string when an encoding is given. |
+| `readStream(path)` | Read stream of a stored file, for serving it without buffering. |
+
+`path` here is always a flat file name from a cache address; anything with a path separator in it throws, so a key cannot escape the storage directory.
+
+A cache hit verifies the stored contents against the hash in its manifest and falls back to generating on a mismatch, so a half-written or damaged file costs a re-encode rather than a broken build. A missing manifest or a missing file does the same.
+
+### Pruning
+
+<Aside type="caution">
+Call `prune()` when the build is over, never before the reads: pruning first would drop exactly the entries the build is about to hit, whose used-at marks it has not refreshed yet.
+</Aside>
+
+`prune()` runs once per storage instance - repeated calls return the same promise - and removes:
+
+- entries whose manifest says they were last used longer than `maxAge` ago, and entries whose manifest cannot be parsed at all - an unusable entry is stale;
+- entries with no manifest, and only when their files are all older than a five minute grace period. The grace tells a leftover of a crashed build from an entry another build is writing right now.
+
+A manifest that fails to read for any other reason - a permission error, a busy disk - says nothing about the entry, so it is kept.
+
+The used-at mark lives in the manifest rather than in the file mtime, because archives and cache restores do not always carry timestamps. It is rewritten at most once per tenth of `maxAge`: a mark only has to separate a used entry from an abandoned one, and a manifest write per hit would cost more than it saves.
+
+Files that do not look like entries of this storage - anything whose name does not start with a 64 character hex key - are left alone. The directory is configurable, and files of other tools are not this storage's to remove.
+
+## Matching
+
+```ts
+matchImage(source: ImageSource, matcher?: Matcher | Matcher[] | null): Promise<boolean>
+```
+
+`Matcher` is a glob string, a CSS media query string, or a `MatcherFunction`:
+
+```js
+await matchImage(source, '**/*.jpg')            // glob, matched against the posix path
+await matchImage(source, '(min-width: 1920px)') // media query, matched against the source size
+await matchImage(source, (path, size) => size.width > size.height)
+```
+
+- A string containing a size feature - `width`, `height`, `min-width`, `max-width`, `min-height`, `max-height` in parentheses - is treated as a media query; every other string is a [picomatch](https://github.com/micromatch/picomatch) glob.
+- Paths are normalized to posix separators first, so one glob works on every platform.
+- An **array of matchers is an and**: every one of them has to match. Use separate rules for "either".
+- A nullish matcher matches any readable image.
+- An image whose metadata cannot be read - an unsupported or broken file - never matches, so it is skipped rather than failing the run.
+
+A `MatcherFunction` receives `(path, size, source)`, where `path` is the original source path, `size` is `{ width, height }` and `source` is the whole `ImageSource`.
+
+## Metadata
+
+```ts
+getImageMetadata(source: ImageSource): Promise<ImageMetadata>
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `format` | `ImageFormat` | Normalized format, read from the contents and falling back to the file extension. |
+| `width` | `number` | Width in pixels. |
+| `height` | `number` | Height in pixels. For an animated image, the height of a single frame. |
+| `animated` | `boolean` | The image has more than one frame. |
+
+The size is the oriented one: sharp reports the stored dimensions, but browsers honour the EXIF orientation and the generator auto-orients, so a portrait shot stored as landscape with an orientation tag reports its portrait size here. An unsupported format, or a file whose dimensions cannot be read, throws.
+
+Results are cached by the contents buffer in a `WeakMap`, so calling it repeatedly for the same buffer - which matching and generation both do - costs one read.
+
+## Formats
+
+```js
+import {
+  supportedFormats,
+  mimeTypes,
+  normalizeFormat,
+  isSupportedFormat,
+  getFormatFromPath
+} from '@srcset/core'
+```
+
+`supportedFormats` is `['avif', 'webp', 'jpg', 'png', 'gif', 'svg']`, and `ImageFormat` is the union of those. `mimeTypes` maps them:
+
+| Format | Mime type |
+| --- | --- |
+| `avif` | `image/avif` |
+| `webp` | `image/webp` |
+| `jpg` | `image/jpeg` |
+| `png` | `image/png` |
+| `gif` | `image/gif` |
+| `svg` | `image/svg+xml` |
+
+- `normalizeFormat(format)` lowercases the name and resolves the aliases `jpeg` to `jpg` and `heif` to `avif`.
+- `isSupportedFormat(format)` is a type guard over a normalized name.
+- `getFormatFromPath(path)` takes the extension and normalizes it: `photo.JPG` is `jpg`.
+
+## Paths
+
+```js
+import {
+  toPosixPath,
+  renameImagePath,
+  formatPostfix,
+  resolveVariant
+} from '@srcset/core'
+```
+
+| Function | Description |
+| --- | --- |
+| `toPosixPath(path)` | Replace backslashes with slashes. Bundlers feed native and posix paths alike; everything downstream expects posix. |
+| `renameImagePath(path, postfix, format)` | Add the postfix to the file name and replace the extension: `renameImagePath('images/photo.jpg', '@600w', 'webp')` is `images/photo@600w.webp`. |
+| `formatPostfix(postfix, width, requestedWidth, format)` | Apply a postfix string or formatter. A string is returned as it is. |
+| `resolveVariant(context, variant)` | Resolve a variant before generating it: `{ requestedWidth, targetWidth, postfix, path }`. `targetWidth` is the requested width capped by the source width; `variant` is `null` for the svg passthrough, which keeps the source path. |
+
+## Defaults
+
+```js
+import {
+  defaultProcessing,
+  defaultPostfix,
+  mergeProcessingOptions
+} from '@srcset/core'
+```
+
+`defaultProcessing` is `{ jpg: { mozjpeg: true }, png: { palette: true } }`. Both were chosen empirically by SSIM and file size: `mozjpeg` gives around 30% smaller jpg files at the same quality, and `palette` enables lossy quantization for png, the way `pngquant` does. The sharp defaults for webp and avif are good as they are.
+
+`mergeProcessingOptions(base, override)` merges per format, which is what the generator does with the options it is given: `processing: { jpg: { quality: 80 } }` keeps the default `mozjpeg: true` instead of replacing the whole `jpg` object.
+
+`defaultPostfix` is a `PostfixFormatter`, `(width, requestedWidth, format) => string`. It returns `@<width>w` built from the actual output width, and an empty string for the original-size variant - the one requested with the multiplier `1`, whose file name stays the source file name.
+
+## Concurrency
+
+```ts
+parallel(items, handler, limit?): AsyncGenerator<NonNullable<Awaited<R>>>
+```
+
+The helper the generator runs on: it starts every task under the [p-limit](https://github.com/sindresorhus/p-limit) function and yields the results **in the original order**, skipping nullish ones. Without a `limit` it makes its own, sized by `availableParallelism()`.
+
+Encoding is CPU bound, so one budget per process is what you want. Several generators - one per rule set, or one per output directory - should share a single `limit`:
+
+```js
+import { availableParallelism } from 'node:os'
+import pLimit from 'p-limit'
+import { SrcSetGenerator } from '@srcset/core'
+
+const limit = pLimit(availableParallelism())
+const thumbnails = new SrcSetGenerator({ limit })
+const heroes = new SrcSetGenerator({ limit })
+```
+
+## Types
+
+Every type is exported from the package root:
+
+| Type | What it describes |
+| --- | --- |
+| `ImageSource` | The input: `{ path, contents }`. |
+| `ImageMetadata` | Result of `getImageMetadata`. |
+| `SrcSetImage` | A generated variant. |
+| `ImageVariant` | A format plus a width to generate: what `getKey` and `resolveVariant` address. |
+| `SrcSetRule` | A `generateAll` rule: `match`, `fallthrough` and the generate options. |
+| `SrcSetGeneratorOptions`, `GenerateOptions` | Constructor and per-call options. |
+| `GenerateContext` | The resolved inputs of one `generate` call, passed to the cache storage. |
+| `ProcessingOptions`, `OptimizationOptions`, `ImageOptimizer` | Encoder options and custom optimizers. |
+| `Postfix`, `PostfixFormatter` | Variant file name postfix. |
+| `Matcher`, `MatcherFunction`, `ImageSize` | Matching. |
+| `ImageFormat` | Union of the supported formats. |
+| `SrcSetCacheStorageOptions`, `CacheAddress` | Cache storage options and addresses. |
+| `ResolvedVariant` | Result of `resolveVariant`. |
