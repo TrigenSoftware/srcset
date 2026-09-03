@@ -26,8 +26,8 @@
 [build]: https://img.shields.io/github/actions/workflow/status/TrigenSoftware/srcset/tests.yml?branch=main
 [build-url]: https://github.com/TrigenSoftware/srcset/actions
 
-[coverage]: https://img.shields.io/codecov/c/github/TrigenSoftware/srcset.svg
-[coverage-url]: https://app.codecov.io/gh/TrigenSoftware/srcset
+[coverage]: https://coveralls.io/repos/github/TrigenSoftware/srcset/badge.svg?branch=main
+[coverage-url]: https://coveralls.io/github/TrigenSoftware/srcset?branch=main
 
 Adapter for [Cloudflare image transformations](https://developers.cloudflare.com/images/transform-images/): srcset variant urls for content images, e.g. from an API or a CMS.
 
