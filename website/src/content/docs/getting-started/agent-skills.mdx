@@ -1,0 +1,73 @@
+---
+title: Agent Skills
+description: The two universal agent skills shipped with srcset - setup-srcset wires an integration into a project, srcset writes the code that uses it.
+sidebar:
+  order: 5
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+The repository ships two **universal agent skills** - instructions that teach an AI coding agent how to set up and use srcset. They are compatible with Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, Windsurf, Cline and other agents that support the [skills](https://github.com/vercel-labs/skills) format.
+
+They carry the parts of this documentation an agent gets wrong on its own: the rule model, the format specific advice and the pitfalls.
+
+## setup-srcset
+
+The [`setup-srcset`](https://github.com/TrigenSoftware/srcset/tree/main/skills/setup-srcset) skill adds responsive images to a project end to end. Rather than pasting a template, it guides the agent to:
+
+- **Pick the integration from the repository** - `vite.config.*`, `webpack.config.*`, `rspack.config.*` and the `package.json` scripts decide between the [Vite plugin](/integrations/vite-plugin/), the [loader](/integrations/loader/), [cli baking](/integrations/baking/) and the [proxy adapters](/proxies/). Telling it which one to use works too.
+- **Write the [rules](/getting-started/rules/), not just copy them** - the first match wins, a rule without `match` is the catch-all and goes last, a width of 1 or less is a multiplier, the first format is the fallback when the source format is not in the list, and png, gif and svg need rules of their own.
+- **Wire the ambient types** - the `client` reference the chosen integration ships, kept next to the `vite/client` one a Vite project already has.
+- **Render the variants** - the `Picture` and `Image` [components](/components/) for React, Preact or Svelte, or `getImageProps` and `getSourceProps` when the project has no component package.
+- **Finish with the four checks** - the emitted assets, the length of `srcSet`, the rendered markup, and a type-check.
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpx skills add TrigenSoftware/srcset --skill setup-srcset
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn dlx skills add TrigenSoftware/srcset --skill setup-srcset
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npx skills add TrigenSoftware/srcset --skill setup-srcset
+    ```
+  </TabItem>
+</Tabs>
+
+## srcset
+
+The [`srcset`](https://github.com/TrigenSoftware/srcset/tree/main/skills/srcset) skill is for writing the code: the setup exists, and now something has to display an image. It teaches the agent:
+
+- **[The image module](/getting-started/image-modules/)** - what the import gives back, and that a bundler integration and a [baked](/integrations/baking/) module produce exactly the same exports.
+- **[Rendering](/components/)** - `srcSet` and `sizes` on both components while `src` goes to `Image` alone, the per-framework differences in refs and prop casing, and what `getSourceProps` and `getImageProps` return without a framework.
+- **`sizes` and retina** - that a `w` descriptor is a file width rather than a screen, so one list of widths covers both densities and there is no `@2x` rule to write.
+- **[Rules](/getting-started/rules/)** - the first match wins, an array in `match` is an `and`, png, gif and svg need rules of their own.
+- **[The command line](/integrations/cli/)** - the full option table, arguments that replace the config `rules` rather than merging into it, where the files land, and the four `--module` formats with what the project still has to provide.
+- **The pitfalls** - `srcSet` given only to `Picture`, a missing `sizes`, a placeholder that never resets, quoting the globs, and a re-run that never cleans the destination.
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpx skills add TrigenSoftware/srcset --skill srcset
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn dlx skills add TrigenSoftware/srcset --skill srcset
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npx skills add TrigenSoftware/srcset --skill srcset
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside title="What gets installed">
+  The command copies the skill into the skills directory of the agent. From then on, asking it to "add responsive images" or "convert these images to webp and avif" runs the workflow above - the detection, the rules, the types and the verification steps - instead of an improvised setup.
+</Aside>

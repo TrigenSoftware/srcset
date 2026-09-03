@@ -1,0 +1,218 @@
+---
+title: Webpack and Rspack loader
+description: Setup and option reference for @srcset/loader - the module rule, the output name template and its tokens, public paths, SSR builds and caching.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+`@srcset/loader` turns an image import into a [module carrying every generated variant](/getting-started/image-modules/). One loader covers both [webpack](https://webpack.js.org/) and [Rspack](https://rspack.rs/) - it only uses the parts of the loader context both compilers implement. Rsbuild and other Rspack-based tools take the same `module.rules` entry through their Rspack config escape hatch.
+
+## Install
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add -D @srcset/loader
+    pnpm add @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add -D @srcset/loader
+    yarn add @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i -D @srcset/loader
+    npm i @srcset/runtime
+    ```
+  </TabItem>
+</Tabs>
+
+`@srcset/runtime` is a peer dependency - it carries the `SrcSetEntry` type and the helpers that turn variants into DOM attributes. It ships to the browser, so it goes into the regular dependencies while the loader stays a dev one. `webpack` and `@rspack/core` are optional peers: install whichever one the project builds with.
+
+## Usage
+
+```js title="webpack.config.js / rspack.config.js"
+export default {
+  module: {
+    rules: [
+      {
+        test: /\.(jpe?g|png|gif)$/i,
+        use: {
+          loader: '@srcset/loader',
+          options: {
+            rules: [
+              // Png keeps its format for the transparency, plus a webp twin.
+              {
+                match: '**/*.png',
+                width: [1, 0.5],
+                format: ['png', 'webp']
+              },
+              // Everything else: jpg for the reach, webp and avif for the size.
+              {
+                width: [1, 0.5],
+                format: ['jpg', 'webp', 'avif']
+              }
+            ],
+            placeholder: true
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+```ts
+import url, { src, srcSet, srcMap, placeholder } from './photo.jpg'
+```
+
+The rule model - matching, widths, formats, encoding options - is the same for every build-time integration and is documented on the [Rules](/getting-started/rules/) page. What the import gives you back is on the [Image modules](/getting-started/image-modules/) page.
+
+Without `rules` the loader falls back to a single empty rule: every image is re-encoded once, at its own width and in its own format.
+
+<Aside type="caution" title="One rule per extension, no more">
+  The loader replaces whatever asset handling the project had for those extensions. Remove a competing `type: 'asset/resource'` or `asset/inline` rule for the same `test`, or the two will fight over the same files.
+
+  The other way around matters too: webpack and Rspack have **no built-in handling for image extensions**. An extension left out of the loader's `test` and covered by nothing else fails to import at all, so keep an `asset/resource` rule for the extensions srcset does not take - `.svg` in particular, which is never resized or converted anyway.
+</Aside>
+
+## Options
+
+Loader options, all optional:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `rules` | `SrcSetRule[]` | one empty rule | Rules to generate the variants. A [rule in the import query](/getting-started/image-modules/) replaces them for that import. |
+| `placeholder` | `boolean \| { width, format }` | off | Adds the `placeholder` export - a tiny variant inlined as a data-url. Defaults to 16px wide webp; `format` is `'webp'` or `'jpg'`. |
+| `select` | `{ id?, format?, width? }` | the source format at the source width | Which variant the default export and `src` point at. `width` may be an absolute value or a multiplier less than or equal to 1. The import query takes precedence. |
+| `resourceId` | `(width, requestedWidth, format) => string` | `` `${format}${width}` `` | Formatter of the `srcMap` keys and of `src.id`. |
+| `cache` | `boolean \| { dir, maxAge }` | `false` | Disk cache of the generated variants - see [Caching](#caching). |
+| `name` | `string` | see [Output naming](#output-naming) | Output file name template. |
+| `context` | `string` | the compiler root context | Base directory the `[path]` token is relative to. |
+| `outputPath` | `string \| (url, resourcePath, context) => string` | the interpolated name as it is | Directory or resolver for the emitted files. |
+| `publicPath` | `string \| (url, resourcePath, context) => string` | the compiler public path | Public url or resolver for the urls in the module. |
+| `emitFile` | `boolean` | `true` | Write the generated files to the build output. |
+
+The generator options below are inherited from the shared generation core. Set them on the loader as the defaults for every image; all of them except `concurrency` can also be set per rule, where they override the loader-level value:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `processing` | `{ jpg?, png?, webp?, avif?, gif? }` | `{ jpg: { mozjpeg: true }, png: { palette: true } }` | [Sharp output options](https://sharp.pixelplumbing.com/api-output/) per format. Merged per format, so overriding one option keeps the rest of the defaults. |
+| `optimization` | `{ jpg?, png?, webp?, avif?, gif?, svg? }` | none | Custom optimizer function per format, `(contents, format) => Buffer`, applied to the encoded contents. The only way to touch svg, e.g. with `svgo`. |
+| `skipOptimization` | `boolean` | `false` | Do not re-encode the original variant and skip the custom optimizers. |
+| `scalingUp` | `boolean` | `true` | Keep variants requested wider than the source, capped to the source width. `false` drops them instead. Pixels are never upscaled either way. |
+| `postfix` | `string \| (width, requestedWidth, format) => string` | `@<width>w`, empty for the `1` multiplier | Postfix added to the variant file name. A formatter must be pure - it also participates in the cache addressing. |
+| `concurrency` | `number` | `availableParallelism()` | How many variants are encoded in parallel. Loader level only, and shared between the loader runs of the compilation. |
+
+## Output naming
+
+`name` is a template interpolated once per variant. The defaults differ by compiler mode:
+
+| Mode | Default `name` | Example |
+| --- | --- | --- |
+| production and everything else | `[name][postfix].[contenthash:8].[ext]` | `photo@320w.1f4a9c02.webp` |
+| `mode: 'development'` | `[path][name][postfix][sourceext].[ext]` | `images/photo@320w.jpg.webp` |
+
+The development default drops the hash: names stay readable and stable across rebuilds, and cache busting is not needed there. Uniqueness comes from the `[path]` prefix and, for converted images, from `[sourceext]`.
+
+| Token | What it interpolates to |
+| --- | --- |
+| `[name]` | Source file name without the extension. |
+| `[postfix]` | Variant postfix, e.g. `@320w`. Empty for the variant requested with the `1` multiplier. |
+| `[ext]` | Output format of the variant - `jpg`, `webp`, `avif`, `png`, `gif`. |
+| `[path]` | Source directory relative to `context`, with a trailing slash. Empty for a file directly in the context directory, and for a file outside it - emitted names never carry `..` or a drive letter. |
+| `[sourceext]` | Source extension with the dot, e.g. `.jpg`. **Empty when the output format matches the source format.** |
+| `[hash]`, `[contenthash]` | Sha256 of the variant contents, 8 hex characters. Both tokens are the same hash; `[contenthash:12]` sets the length. |
+
+`[sourceext]` exists for one reason: two same-named siblings in different formats produce one name once they are converted. `hero.jpg` and `hero.png` both become `hero.webp` - with `[sourceext]` they become `hero.jpg.webp` and `hero.png.webp` instead. In the production default the content hash already keeps them apart, so the token is only in the development one.
+
+## Paths
+
+```js
+// One entry of module.rules
+{
+  loader: '@srcset/loader',
+  options: {
+    name: '[name][postfix].[contenthash:8].[ext]',
+    outputPath: 'static/images',
+    publicPath: '/static/images'
+  }
+}
+```
+
+- **`outputPath`** - a string is joined in front of the interpolated name, so the file above is emitted to `static/images/photo@320w.1f4a9c02.webp`. A function receives `(url, resourcePath, context)` and returns the whole output path.
+- **`publicPath`** - a string is prefixed to the name, with a slash inserted when it is missing. A function receives the same three arguments. Left unset, the module builds its urls from the compiler's public path at runtime, through `__webpack_public_path__`, so a public path resolved at runtime keeps working.
+- **`context`** - the base directory of the `[path]` token, and the third argument of both resolvers. Defaults to the compiler root context.
+
+## SSR builds
+
+For an SSR or SSG setup the same images are processed by both compilations. Run the server build with `emitFile: false` so the files are written once, by the client build:
+
+```js
+// The same entry in the server config
+{
+  loader: '@srcset/loader',
+  options: {
+    emitFile: false
+  }
+}
+```
+
+The module still carries the full `srcSet` with the same urls - only the file writing is skipped. Everything the urls are built from has to match in both configurations: `name`, `context`, `outputPath`, `publicPath`, and the compiler `mode`, which picks the default `name`. Otherwise the server renders urls the client build never wrote.
+
+## Caching
+
+The disk cache is **off by default**, because the persistent cache of the bundler already covers it - `cache: { type: 'filesystem' }` in webpack, `cache: { type: 'persistent' }` in Rspack. With the bundler cache on, an unchanged image is not sent to the loader at all.
+
+Turn the srcset cache on when the bundler cache is off, or when the same images are processed by more than one compilation:
+
+```js
+// One entry of module.rules
+{
+  loader: '@srcset/loader',
+  options: {
+    cache: true
+  }
+}
+```
+
+- `cache: true` stores the variants in `node_modules/.cache/srcset` under the compiler root context.
+- `{ dir, maxAge }` moves the storage or changes how long an unused entry survives - `maxAge` is in milliseconds and defaults to 30 days.
+
+One storage is shared by every loader run of a compilation, so a variant generated for one module is a hit for the next one; two different configurations of the same directory stay two separate storages. Stale entries are pruned when the compiler is done, never before: pruning first would drop the entries the build is about to hit.
+
+The address of an entry covers the source contents, the variant and every generation option, function options included - they are keyed by their source text. Changing a rule, a sharp option or an optimizer function therefore misses the cache instead of serving a stale file.
+
+## TypeScript
+
+The loader ships ambient declarations for the image imports. Reference them once, in a `.d.ts` of the project or through the tsconfig `types` array:
+
+```ts title="src/images.d.ts"
+/// <reference types="@srcset/loader/client" />
+```
+
+They declare the default url export and the named ones - `src`, `srcSet`, `srcMap`, `placeholder` - for `.jpg`, `.jpeg`, `.png`, `.webp`, `.avif` and `.gif`. A missing reference shows up as `has no exported member 'srcSet'`.
+
+## Import query
+
+The query of a single import overrides the configured options for that import only:
+
+```ts
+import wide from './photo.jpg?{"width":[1,0.5],"format":["webp","jpg"]}'
+import small from './photo.jpg?format=webp&width=600'
+```
+
+A JSON rule replaces the whole rule set; `id=`, `format=` and `width=` pick the variant behind the default export; `placeholder` and `placeholder=false` switch that export on and off. Parts combine with `&`. The full syntax is on the [Image modules](/getting-started/image-modules/) page.
+
+## Pitfalls
+
+- **A competing asset rule for the same `test`.** Remove it - the loader emits the files itself.
+- **An image extension covered by nothing.** Unlike Vite, webpack and Rspack have no built-in handling for `.jpg`; every extension needs either the loader or an asset rule.
+- **Keep `.svg` out of the `test`.** Svg is never resized or converted, and a raster-only `format` drops it silently. Give it an `asset/resource` rule, or whatever svg handling the project already has.
+- **No catch-all rule.** An image matched by no rule produces an empty module - default export `''`, `src` is `null`, `srcSet` is `[]` - and the page silently renders nothing. Keep a rule without `match` last.
+- **A custom `name` without a hash or `[sourceext]`.** Converted variants of same-named siblings then overwrite each other in the output.

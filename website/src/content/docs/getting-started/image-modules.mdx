@@ -1,0 +1,183 @@
+---
+title: Image Modules
+description: The module an image import turns into - exports, resource ids, the import query, placeholders, tree-shaking and the TypeScript declarations.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Every integration turns an image import into the same ES module, and the cli [bakes](/integrations/baking/) that module to disk. This page is the contract: what the module exports and how to bend it per import.
+
+```ts
+import url, { src, srcSet, srcMap, placeholder } from './photo.jpg'
+```
+
+## Exports
+
+| Export | Type | What it is |
+| --- | --- | --- |
+| `default` | `string` | Url of the selected variant, e.g. `/assets/photo-BsK7yzuP.jpg`. |
+| `src` | `SrcSetEntry` | The selected variant. `null` when no rule matched the image. |
+| `srcSet` | `SrcSetEntry[]` | Every generated variant, in rule order: formats outer, widths inner. |
+| `srcMap` | `Record<string, string>` | Resource id to url, e.g. `srcMap.webp800`. |
+| `placeholder` | `string \| undefined` | Blur-up data-url, when the `placeholder` option is on. |
+
+A variant is a plain object - the `SrcSetEntry` of `@srcset/runtime`:
+
+```ts
+interface SrcSetEntry {
+  id: string
+  format: 'avif' | 'webp' | 'jpg' | 'png' | 'gif' | 'svg'
+  type: string
+  width: number
+  height?: number
+  url: string
+}
+```
+
+`height` is optional in the type because the [proxy adapters](/proxies/) build variants at runtime and cannot know it. A build-time module always fills it in, which is what makes the anti-CLS sizing of the components work.
+
+The module the integrations generate looks like this, with the urls filled in by the bundler:
+
+```js
+const url = "/assets/photo-BsK7yzuP.jpg";
+const src = {
+  id: "jpg1600",
+  format: "jpg",
+  type: "image/jpeg",
+  width: 1600,
+  height: 1067,
+  url: url
+};
+
+export default url;
+export { src };
+export const srcSet = [src, /* the other variants */];
+export const srcMap = {
+  "jpg1600": url,
+  "webp1600": "/assets/photo-C9tRqAsz.webp"
+};
+export const placeholder = undefined;
+```
+
+## Resource ids
+
+The id of a variant is `<format><width>` by default, built from the **actual** output width: `jpg1600`, `webp800`. Ids are what `srcMap` is keyed by, so `srcMap.webp800` is the way to reach one specific variant - a css background, an `og:image`, an email template.
+
+The `resourceId` option replaces the formatter:
+
+```js
+srcset({
+  // `jpg100`, `jpg50` - ids that do not move when the source is replaced.
+  resourceId: (width, requestedWidth, format) => (
+    requestedWidth <= 1
+      ? `${format}${requestedWidth * 100}`
+      : `${format}${width}`
+  )
+})
+```
+
+`width` is the actual output width in pixels; `requestedWidth` is the multiplier when the variant was requested with one, and the actual width otherwise. Ids are the keys of `srcMap`, so a formatter that drops the width or the format makes variants overwrite each other in the map.
+
+## Choosing the default export
+
+Without any hint the module picks the variant in the **source format at the source width**, when the rules generated one, and the **first generated variant** otherwise - the first format at the first width.
+
+The `select` option makes the pick explicit:
+
+```js
+srcset({
+  select: {
+    format: 'webp'
+  }
+})
+```
+
+| Field | Matches |
+| --- | --- |
+| `id` | The variant with this resource id. Wins on its own. |
+| `format` | The variant of this format. |
+| `width` | A value above 1 is an absolute width in pixels; a value of 1 or less matches the variant requested with that multiplier. |
+
+An unset field is a wildcard, and `format` plus `width` narrow together. A selection that matches no variant **silently falls back to the first one**, so check the id in the built module rather than assuming.
+
+## Import query
+
+The import query overrides the configuration for one import. Parts combine with `&`:
+
+| Part | Effect |
+| --- | --- |
+| `?{"width":[1,0.5],"format":["webp","jpg"]}` | A JSON [rule](/getting-started/rules/) that **replaces the whole rule set** for this import. |
+| `?id=webp800` | Default export: the variant with this resource id. |
+| `?format=webp` | Default export: the variant of this format. |
+| `?width=800` | Default export: the variant of this width, or of this multiplier when the value is 1 or less. |
+| `?placeholder` / `?placeholder=false` | Switch the `placeholder` export on or off. |
+
+```js
+// One hero image at three widths, avif first, whatever the configured rules say.
+import * as hero from './hero.jpg?{"width":[1,0.5,0.25],"format":["avif","webp","jpg"]}'
+// The configured rules, but the default export points at the webp variant.
+import photo from './photo.jpg?format=webp&width=800'
+// The configured rules plus a blur-up placeholder, for this import only.
+import { src, placeholder } from './cover.jpg?placeholder'
+```
+
+Things worth knowing before reaching for it:
+
+- the query is split on `&`, so the JSON rule has to be a single object without one; a broken one fails the build with `Invalid srcset rule in the import query`, and a part the parser does not know is ignored without a word;
+- `?placeholder` **keeps the configured placeholder options** rather than falling back to the defaults, so a project-wide `placeholder: { width: 24 }` still applies. An explicit `placeholder: false` in the integration options wins over the query, though - leave the option unset instead of disabling it if imports are meant to switch it on;
+- in Vite the native queries - `?url`, `?raw`, `?inline`, `?worker` - hand the import back to the Vite asset pipeline, so they cannot be mixed with these.
+
+## Placeholders
+
+`placeholder: true` adds a tiny variant inlined as a data-url, 16px wide and webp by default:
+
+```js
+srcset({
+  placeholder: {
+    width: 24,
+    format: 'webp'
+  }
+})
+```
+
+`format` is `'webp'` or `'jpg'`; `width` is a positive integer, and a value above the source width is capped rather than upscaled. The placeholder is never emitted as a file: it is a string constant in the module, dropped from the bundle when nothing imports it, so enabling it project-wide adds nothing to the bundle until it is used. It is still encoded at build time, alongside the other variants and through the same disk cache.
+
+The [components](/components/) show it as a background until the image loads. By hand it is a css `background-image`, swapped out in the `load` handler of the image.
+
+## Tree-shaking
+
+The exports are independent, so importing only what a page needs leaves the rest out of the bundle:
+
+```ts
+// `srcMap` and `placeholder` never reach the bundle.
+import { src, srcSet } from './photo.jpg'
+```
+
+The **files** are another matter: the integration emits every variant while it generates the module, long before anything is tree-shaken. A rule that generates six variants writes six files into the build output, whether or not `srcSet` is imported. Trim the rules, not the imports, to trim the output.
+
+## TypeScript
+
+Both integrations ship ambient declarations for `.jpg`, `.jpeg`, `.png`, `.webp`, `.avif` and `.gif` imports. Reference them once, in a `.d.ts` of the project or through the tsconfig `types` array:
+
+| Package | Reference | What it declares |
+| --- | --- | --- |
+| `@srcset/vite-plugin` | `/// <reference types="@srcset/vite-plugin/client" />` | The named exports. The default url export comes from `vite/client`, which the file references itself. |
+| `@srcset/loader` | `/// <reference types="@srcset/loader/client" />` | The named exports and the default url export. |
+
+```ts title="src/vite-env.d.ts"
+/// <reference types="vite/client" />
+/// <reference types="@srcset/vite-plugin/client" />
+```
+
+Two symptoms of a missing reference:
+
+- `Module '"*.jpg"' has no exported member 'srcSet'` - the asset types are there, the srcset ones are not;
+- `Cannot find module './photo.jpg'` - nothing declares the extension at all.
+
+`srcMap` is typed as `Record<string, string>`, so `srcMap.webp800` type-checks whether or not that variant exists. The ids in the built module are the source of truth.
+
+<Aside title="The cli produces the same module">
+  `srcset --module ts` writes a module with exactly these exports next to the variants it generated, so app code moves between a bundler integration and committed files without a change. See [Baking modules](/integrations/baking/).
+</Aside>

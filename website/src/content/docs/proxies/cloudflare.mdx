@@ -1,0 +1,196 @@
+---
+title: Cloudflare
+description: "@srcset/cloudflare: building image transformation urls on a Cloudflare zone - zone setup, forceable formats, format=auto and passthrough."
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components'
+
+[Cloudflare image transformations](https://developers.cloudflare.com/images/transform-images/) resize and convert images at the edge, driven by a url on the zone: `/cdn-cgi/image/<options>/<source image>`. There is nothing to deploy - the zone in front of the site already serves them - and nothing to sign. `@srcset/cloudflare` builds those urls and returns the [same srcset object](/proxies/) the bundler integrations produce.
+
+## Install
+
+`@srcset/runtime` is a peer dependency: it carries the `SrcSetEntry` type and the helpers that turn variants into DOM attributes. Both packages run in the browser, so both are regular dependencies rather than dev ones.
+
+<Tabs syncKey="package-manager">
+  <TabItem label="pnpm">
+    ```sh frame="none"
+    pnpm add @srcset/cloudflare @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```sh frame="none"
+    yarn add @srcset/cloudflare @srcset/runtime
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```sh frame="none"
+    npm i @srcset/cloudflare @srcset/runtime
+    ```
+  </TabItem>
+</Tabs>
+
+## Usage
+
+On a zone the builder needs no options at all:
+
+```ts title="cloudflare.ts"
+import { Cloudflare } from '@srcset/cloudflare'
+
+export const cloudflare = new Cloudflare()
+```
+
+```ts
+import { cloudflare } from './cloudflare.ts'
+
+const { url, src, srcSet, srcMap } = cloudflare.image(photo.url, {
+  width: [600, 1200],
+  format: ['jpg', 'webp']
+})
+
+srcMap.webp600 // /cdn-cgi/image/width=600,format=webp/https://cdn.example.com/photo.jpg
+```
+
+Four variants come back, with `src` pointing at `jpg1200` - the source format at the largest width. See [Image proxies](/proxies/) for the object's fields, how to render it, and the rule semantics both adapters share.
+
+## Options
+
+| Option | Description |
+| --- | --- |
+| `endpoint` | Transformations endpoint: an absolute url, or a path on the zone serving the site. Defaults to `/cdn-cgi/image`. A trailing slash is trimmed. |
+| `processing` | Builder of the transformation options segment. Defaults to `width={width},format={format}`. |
+| `quality` | Quality for the default processing builder: adds `,quality={quality}` to the segment. |
+| `passthrough` | Return the source urls untouched instead of building transformation urls. |
+
+The rule passed to `image(sourceUrl, rule)`:
+
+| Field | Description |
+| --- | --- |
+| `width` | Absolute output width(s) in pixels. Integers greater than 1 - a multiplier throws. |
+| `format` | Output format(s). Defaults to the source url file extension, which is also the `src` fallback. |
+
+## How the url is built
+
+```
+{endpoint}/{options}/{source url}
+```
+
+An absolute source url is appended as it is, query string included:
+
+```
+/cdn-cgi/image/width=600,format=webp/https://cdn.example.com/photo.jpg
+```
+
+A source that is a path on the zone loses its leading slash, so that the two do not collide into a double slash:
+
+```ts
+cloudflare.image('/assets/photo.jpg', { width: 600 })
+// /cdn-cgi/image/width=600,format=jpeg/assets/photo.jpg
+```
+
+The default options segment is `width={width},format={format}`, plus `,quality={quality}` when the `quality` option is set. Note the format spelling: the `jpg` of the srcset rule becomes Cloudflare's `format=jpeg`.
+
+## Output formats
+
+Cloudflare can force **jpeg, webp and avif**, and that is the whole list. The adapter validates the rule against it rather than letting the zone return something unexpected:
+
+```ts
+cloudflare.image('https://cdn.example.com/photo.jpg', {
+  width: 600,
+  format: 'png'
+})
+// TypeError: Cloudflare can not force the png output format.
+```
+
+A non-forceable format is still valid when it *is* the source format - then the variant is a plain resize and the url carries no `format` option at all, leaving the output format to Cloudflare:
+
+```ts
+cloudflare.image('https://cdn.example.com/logo.png', {
+  width: 600,
+  format: ['webp', 'png']
+})
+// srcMap.webp600 -> /cdn-cgi/image/width=600,format=webp/https://cdn.example.com/logo.png
+// srcMap.png600  -> /cdn-cgi/image/width=600/https://cdn.example.com/logo.png
+```
+
+Without `format` the output format is read from the **source url extension**: only the path is inspected, so a query string never confuses it, `.jpeg` normalizes to `jpg`, and an unrecognized or missing extension falls back to `jpg`.
+
+An **svg source passes through untouched**, whatever the rule says: Cloudflare returns svg as it is, so building transformation urls for it would only add a hop. `url` and `src` carry the original url, `srcSet` and `srcMap` come back empty, and `src.format` stays `svg` - the markup degrades to a plain `<img src>`, which is what a vector file wants anyway.
+
+## Format negotiation
+
+Instead of generating a variant per format, Cloudflare can pick the format itself from the request's `Accept` header. That is a `processing` hook away:
+
+```ts
+export const cloudflare = new Cloudflare({
+  processing: ({ width }) => `width=${width},format=auto`
+})
+```
+
+```ts
+cloudflare.image(photo.url, { width: [600, 1200] })
+// /cdn-cgi/image/width=600,format=auto/https://cdn.example.com/photo.jpg
+// /cdn-cgi/image/width=1200,format=auto/https://cdn.example.com/photo.jpg
+```
+
+Half the urls, half the transformations, and browsers still get webp or avif where they support it. The trade is control: the negotiation happens per request, and the response format is invisible to the markup.
+
+<Aside type="caution" title="Do not list formats with format=auto">
+  The hook ignores the variant's `format`, so a rule with `format: ['webp', 'jpg']` would build the same url twice - once labeled `image/webp` and once `image/jpeg` - and `Picture` would render two `<source>` elements pointing at identical negotiated urls. Leave `format` out of the rule so one group is built, and render a plain `<img srcset>` with width descriptors.
+</Aside>
+
+The hook returns the whole options segment, so any [transformation option](https://developers.cloudflare.com/images/transform-images/transform-via-url/#options) works the same way - `fit`, `gravity`, `sharpen`, `background`. With a hook in place the `quality` option is ignored: it feeds the default builder only.
+
+## Zone setup
+
+This is the part that breaks first, and none of it lives in the code.
+
+<Steps>
+
+1. **Enable transformations on the zone.**
+
+   In the Cloudflare dashboard open the zone, go to **Images** and then **Transformations**, and turn them on. Until then `/cdn-cgi/image/...` is just a 404 path on the site. The urls also have to reach Cloudflare at all: the hostname serving them must be proxied, the orange cloud in DNS.
+
+2. **Allow the external origins.**
+
+   Out of the box a zone transforms only images from itself. Images on another hostname - a headless CMS, an object storage bucket, a separate asset CDN, which is exactly the case this package exists for - are refused until that hostname is listed among the zone's allowed origins in the same Transformations panel, or the zone is set to accept any origin.
+
+   The alternative is to not have an external origin: serve the images through a path on the zone, with a route or a worker in front of the storage, and hand the adapter a `/media/...` path instead of an absolute url.
+
+3. **Point the endpoint at the zone.**
+
+   The default `/cdn-cgi/image` is relative, so it resolves against whatever host serves the page. That is right when the site is on the zone, and wrong everywhere else - a preview deployment on another host, a native app, an email. Give those an absolute endpoint on the zone:
+
+   ```ts
+   export const cloudflare = new Cloudflare({
+     endpoint: 'https://example.com/cdn-cgi/image'
+   })
+   ```
+
+</Steps>
+
+## Passthrough
+
+```ts
+export const cloudflare = new Cloudflare({
+  passthrough: import.meta.env.DEV
+})
+```
+
+`url` and `src` carry the untouched source url, `srcSet` and `srcMap` come back empty, and `processing` is never called - so a dev server that is not behind the zone shows the originals instead of 404s. The rule is still validated, so a bad width fails on the first render rather than after deployment. In passthrough the `src` keeps the source format, and its `width` is the largest requested one - a claim about an image nobody resized.
+
+## Widths and scale-down
+
+The default options segment sets no `fit`, so Cloudflare's own default applies: `scale-down`, which only ever shrinks. A width above the source width returns the source unchanged, while the variant keeps the requested width in its `id` and in its `w` descriptor.
+
+That descriptor is what the browser picks candidates by, so an inflated one makes it choose a small image for a large slot and scale it up. Keep the rule widths within the source width, clamping against the dimensions the CMS reports where possible - the [overview page](/proxies/#descriptors-and-upscaling) has the pattern. A `processing` hook that sets another `fit`, such as `cover` or `contain`, changes that: those do enlarge.
+
+## Pitfalls
+
+- **Only jpeg, webp and avif can be forced.** `format: 'png'` for a jpeg source throws; png and gif are valid only as the source format, and then the variant is a resize with no format conversion requested.
+- **Multiplier widths throw.** `width: [1, 0.5]` is valid in a build-time rule and invalid here: nothing knows the source size at runtime. Fractional and non-finite widths throw as well.
+- **The fallback format comes from the url extension.** `src` is the variant of the source format, or of the first format of the list when the source format is not in it - and a url with no usable extension counts as jpg.
+- **An svg source empties `srcSet`** - the whole call passes through. Code that assumes a non-empty `srcSet` needs to handle it.
+- **The source url is appended raw**, query string included. A cache-busting query that changes on every deploy makes every variant a new transformation.
+- **Every distinct url is a transformation of its own**, counted by the zone. A ladder of six widths across three formats is eighteen of them per image; keep the ladder as short as the layout allows.
