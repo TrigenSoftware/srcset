@@ -121,6 +121,7 @@ describe('cloudflare', () => {
         })
 
         expect(image.srcSet.map(({ id }) => id)).toEqual(['webp600', 'png600'])
+        expect(image.src.id).toBe('png600')
         expect(image.srcMap.png600).toBe('/cdn-cgi/image/width=600/https://cdn.example.com/picture.png')
       })
 
@@ -131,13 +132,31 @@ describe('cloudflare', () => {
         }).srcSet.length).toBe(1)
       })
 
-      it('should select fallback src of the last format with the largest width', () => {
+      it('should select fallback src of the source format with the largest width', () => {
         const image = cloudflare.image(sourceUrl, {
           width: [300, 1200, 600],
           format: ['avif', 'webp', 'jpg']
         })
 
         expect(image.src.id).toBe('jpg1200')
+      })
+
+      it('should select fallback src of the source format wherever it is in the rule', () => {
+        const image = cloudflare.image(sourceUrl, {
+          width: [1200, 600],
+          format: ['jpg', 'webp']
+        })
+
+        expect(image.src.id).toBe('jpg1200')
+      })
+
+      it('should select fallback src of the first format without the source format', () => {
+        const image = cloudflare.image(sourceUrl, {
+          width: [1200, 600],
+          format: ['webp', 'avif']
+        })
+
+        expect(image.src.id).toBe('webp1200')
       })
 
       it('should use custom endpoint', () => {

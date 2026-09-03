@@ -102,13 +102,31 @@ describe('imgproxy', () => {
         }).srcSet.length).toBe(1)
       })
 
-      it('should select fallback src of the last format with the largest width', () => {
+      it('should select fallback src of the source format with the largest width', () => {
         const image = imgproxy.image(sourceUrl, {
           width: [300, 1200, 600],
           format: ['avif', 'webp', 'jpg']
         })
 
         expect(image.src.id).toBe('jpg1200')
+      })
+
+      it('should select fallback src of the source format wherever it is in the rule', () => {
+        const image = imgproxy.image(sourceUrl, {
+          width: [1200, 600],
+          format: ['jpg', 'webp']
+        })
+
+        expect(image.src.id).toBe('jpg1200')
+      })
+
+      it('should select fallback src of the first format without the source format', () => {
+        const image = imgproxy.image(sourceUrl, {
+          width: [1200, 600],
+          format: ['webp', 'avif']
+        })
+
+        expect(image.src.id).toBe('webp1200')
       })
 
       it('should use custom processing builder', () => {

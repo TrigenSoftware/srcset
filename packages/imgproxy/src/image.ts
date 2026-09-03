@@ -50,7 +50,8 @@ export interface ImgproxyImage {
    */
   url: string
   /**
-   * Fallback image variant: the last format, the largest width.
+   * Fallback image variant: the source format, or the first format
+   * of the rule when the source format is not in it, at the largest width.
    */
   src: SrcSetEntry
   /**
@@ -99,18 +100,18 @@ export class Imgproxy {
    * @returns Image srcset object.
    */
   image(sourceUrl: string, rule: ImgproxyRule): ImgproxyImage {
-    const formats = toArray(rule.format, outputFormatFromUrl(sourceUrl))
+    const sourceFormat = outputFormatFromUrl(sourceUrl)
+    // Raster image can't be converted to SVG.
+    const formats = [...new Set(toArray(rule.format, sourceFormat))].filter(format => format !== 'svg')
+    // Same selection as a build-time rule: the source format, or the first
+    // format of the list when the source format is not in it.
+    const srcFormat = formats.includes(sourceFormat) ? sourceFormat : formats[0]
     const widths = toArray(rule.width)
     const srcSet: SrcSetEntry[] = []
     const srcMap: Record<string, string> = {}
     let src: SrcSetEntry | undefined
 
-    for (const format of new Set(formats)) {
-      // Raster image can't be converted to SVG.
-      if (format === 'svg') {
-        continue
-      }
-
+    for (const format of formats) {
       for (const width of new Set(widths)) {
         // The source size is unknown on the client, so multipliers can't be
         // resolved, and `w` descriptors need integer pixel widths.
@@ -136,9 +137,8 @@ export class Imgproxy {
           srcMap[entry.id] = entry.url
         }
 
-        // Formats go first: on format change the entry starts the next format
-        // group, so the src candidate ends up in the last group, the largest width.
-        if (!src || src.format !== entry.format || entry.width > src.width) {
+        // The `src` variant is the largest width of the selected format.
+        if (entry.format === srcFormat && (!src || entry.width > src.width)) {
           src = entry
         }
       }
