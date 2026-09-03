@@ -1,12 +1,12 @@
 /**
- * Normalize an optional single-or-array value to an array.
+ * Normalize an optional single-or-array value to an array of unique values.
  * @param value - Single value, array, or `undefined`.
  * @param fallback - Value for the `undefined` case, omitted for an empty array.
- * @returns Array of values.
+ * @returns Array of unique values.
  */
-export function toArray<T>(value: T | T[] | undefined, fallback?: T): T[] {
+export function toUniqArray<T>(value: T | T[] | undefined, fallback?: T): T[] {
   if (Array.isArray(value)) {
-    return value
+    return [...new Set(value)]
   }
 
   if (value !== undefined) {

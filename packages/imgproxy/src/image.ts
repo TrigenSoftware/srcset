@@ -13,7 +13,7 @@ import {
   buildImgproxyUrl,
   createDefaultProcessing
 } from './url.ts'
-import { toArray } from './utils.ts'
+import { toUniqArray } from './utils.ts'
 
 const FORMAT_PATTERN = /\.(\w+)$/
 const QUERY_OR_FRAGMENT_PATTERN = /[?#]/
@@ -102,17 +102,17 @@ export class Imgproxy {
   image(sourceUrl: string, rule: ImgproxyRule): ImgproxyImage {
     const sourceFormat = outputFormatFromUrl(sourceUrl)
     // Raster image can't be converted to SVG.
-    const formats = [...new Set(toArray(rule.format, sourceFormat))].filter(format => format !== 'svg')
+    const formats = toUniqArray(rule.format, sourceFormat).filter(format => format !== 'svg')
     // Same selection as a build-time rule: the source format, or the first
     // format of the list when the source format is not in it.
     const srcFormat = formats.includes(sourceFormat) ? sourceFormat : formats[0]
-    const widths = toArray(rule.width)
+    const widths = toUniqArray(rule.width)
     const srcSet: SrcSetEntry[] = []
     const srcMap: Record<string, string> = {}
     let src: SrcSetEntry | undefined
 
     for (const format of formats) {
-      for (const width of new Set(widths)) {
+      for (const width of widths) {
         // The source size is unknown on the client, so multipliers can't be
         // resolved, and `w` descriptors need integer pixel widths.
         if (!Number.isInteger(width) || width <= 1) {
