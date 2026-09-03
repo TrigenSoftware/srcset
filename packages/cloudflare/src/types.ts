@@ -49,8 +49,9 @@ export interface CloudflareOptions {
  */
 export interface CloudflareRule {
   /**
-   * Output image format(s). The last one is used as the `src` fallback.
-   * Defaults to the url file extension.
+   * Output image format(s). Defaults to the url file extension.
+   * The `src` fallback is the variant of the source format, or of the
+   * first format of the list when the source format is not in it.
    */
   format?: ImageFormat | ImageFormat[]
   /**

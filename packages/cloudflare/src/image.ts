@@ -14,7 +14,7 @@ import {
   buildCloudflareUrl,
   createDefaultProcessing
 } from './url.ts'
-import { toArray } from './utils.ts'
+import { toUniqArray } from './utils.ts'
 
 const FORMAT_PATTERN = /\.(\w+)$/
 const QUERY_OR_FRAGMENT_PATTERN = /[?#]/
@@ -39,7 +39,8 @@ export interface CloudflareImage {
    */
   url: string
   /**
-   * Fallback image variant: the last format, the largest width.
+   * Fallback image variant: the source format, or the first format
+   * of the rule when the source format is not in it, at the largest width.
    */
   src: SrcSetEntry
   /**
@@ -91,18 +92,21 @@ export class Cloudflare {
     // Cloudflare returns svg sources as is, ignoring all transformations,
     // so an svg source always passes through; jpg drives the variant loop.
     const passthrough = this.#passthrough || isSvgSource
-    const formats: ImageFormat[] = isSvgSource ? ['jpg'] : toArray(rule.format, sourceFormat)
-    const widths = toArray(rule.width)
+    const formats: ImageFormat[] = isSvgSource ? ['jpg'] : toUniqArray(rule.format, sourceFormat)
+    // Same selection as a build-time rule: the source format, or the first
+    // format of the list when the source format is not in it.
+    const srcFormat = formats.includes(sourceFormat) ? sourceFormat : formats[0]
+    const widths = toUniqArray(rule.width)
     const srcSet: SrcSetEntry[] = []
     const srcMap: Record<string, string> = {}
     let src: SrcSetEntry | undefined
 
-    for (const format of new Set(formats)) {
+    for (const format of formats) {
       if (!canOutputFormat(format, sourceFormat)) {
         throw new TypeError(`Cloudflare can not force the ${format} output format.`)
       }
 
-      for (const width of new Set(widths)) {
+      for (const width of widths) {
         // The source size is unknown on the client, so multipliers can't be
         // resolved, and `w` descriptors need integer pixel widths.
         if (!Number.isInteger(width) || width <= 1) {
@@ -127,9 +131,8 @@ export class Cloudflare {
           srcMap[entry.id] = entry.url
         }
 
-        // Formats go first: on format change the entry starts the next format
-        // group, so the src candidate ends up in the last group, the largest width.
-        if (!src || src.format !== entry.format || entry.width > src.width) {
+        // The `src` variant is the largest width of the selected format.
+        if (entry.format === srcFormat && (!src || entry.width > src.width)) {
           src = entry
         }
       }

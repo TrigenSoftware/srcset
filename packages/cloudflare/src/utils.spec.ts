@@ -3,24 +3,26 @@ import {
   it,
   expect
 } from 'vitest'
-import { toArray } from './utils.ts'
+import { toUniqArray } from './utils.ts'
 
 describe('cloudflare', () => {
   describe('utils', () => {
-    describe('toArray', () => {
-      it('should return array as is', () => {
-        const value = [1, 2]
+    describe('toUniqArray', () => {
+      it('should deduplicate an array', () => {
+        expect(toUniqArray([1, 2, 1])).toEqual([1, 2])
+      })
 
-        expect(toArray(value)).toBe(value)
+      it('should keep the order of the first occurrences', () => {
+        expect(toUniqArray([2, 1, 2, 3])).toEqual([2, 1, 3])
       })
 
       it('should wrap single value', () => {
-        expect(toArray(1)).toEqual([1])
+        expect(toUniqArray(1)).toEqual([1])
       })
 
       it('should fall back for undefined', () => {
-        expect(toArray(undefined, 1)).toEqual([1])
-        expect(toArray(undefined)).toEqual([])
+        expect(toUniqArray(undefined, 1)).toEqual([1])
+        expect(toUniqArray(undefined)).toEqual([])
       })
     })
   })
