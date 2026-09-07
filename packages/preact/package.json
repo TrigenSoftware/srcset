@@ -74,7 +74,7 @@
     "@size-limit/preset-small-lib": "^13.0.0",
     "@srcset/runtime": "workspace:^",
     "@testing-library/dom": "^10.0.0",
-    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/preact": "^3.2.4",
     "happy-dom": "^20.0.0",
     "preact": "^10.28.0",
