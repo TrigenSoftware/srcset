@@ -29,3 +29,4 @@ packageExtensions:
   '@sveltejs/package':
     dependencies:
       typescript: ^5.9.0
+workspaceConcurrency: 0
