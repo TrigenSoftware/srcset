@@ -176,6 +176,7 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
+    linkDirectory: false
     publishDirectory: package
 
   packages/cli:
@@ -199,6 +200,7 @@ importers:
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@22.20.1)
+    linkDirectory: false
     publishDirectory: package
 
   packages/cloudflare:
@@ -215,6 +217,7 @@ importers:
       size-limit:
         specifier: ^13.0.0
         version: 13.0.3
+    linkDirectory: false
     publishDirectory: package
 
   packages/core:
@@ -241,6 +244,7 @@ importers:
       '@types/picomatch':
         specifier: ^4.0.3
         version: 4.0.3
+    linkDirectory: false
     publishDirectory: package
 
   packages/imgproxy:
@@ -260,6 +264,7 @@ importers:
       size-limit:
         specifier: ^13.0.0
         version: 13.0.3
+    linkDirectory: false
     publishDirectory: package
 
   packages/loader:
@@ -292,6 +297,7 @@ importers:
       webpack:
         specifier: ^5.108.4
         version: 5.108.4(esbuild@0.28.1)
+    linkDirectory: false
     publishDirectory: package
 
   packages/preact:
@@ -320,6 +326,7 @@ importers:
       size-limit:
         specifier: ^13.0.0
         version: 13.0.3
+    linkDirectory: false
     publishDirectory: package
 
   packages/react:
@@ -360,6 +367,7 @@ importers:
       size-limit:
         specifier: ^13.0.0
         version: 13.0.3
+    linkDirectory: false
     publishDirectory: package
 
   packages/runtime:
@@ -370,6 +378,7 @@ importers:
       size-limit:
         specifier: ^13.0.0
         version: 13.0.3
+    linkDirectory: false
     publishDirectory: package
 
   packages/svelte:
@@ -404,6 +413,7 @@ importers:
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
+    linkDirectory: false
     publishDirectory: package
 
   packages/vite-plugin:
@@ -430,6 +440,7 @@ importers:
       vite:
         specifier: ^8.1.0
         version: 8.1.5(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.6.1)(terser@5.49.0)(yaml@2.9.0)
+    linkDirectory: false
     publishDirectory: package
 
   website:
