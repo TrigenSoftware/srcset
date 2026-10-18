@@ -299,30 +299,30 @@ export function Hero() {
 
 <Steps>
 
-1. **Build the project** and look at the emitted assets: the extra formats and widths have to be there, not just the originals.
+1.  **Build the project** and look at the emitted assets: the extra formats and widths have to be there, not just the originals.
 
-   <Tabs syncKey="bundler">
-     <TabItem label="Vite">
-       They land in `dist/assets`. The second build is much faster - variants are cached on disk in `node_modules/.vite/srcset`, and the cache is on by default.
-     </TabItem>
-     <TabItem label="Webpack and Rspack">
-       They land wherever `output.path` points, named by the loader's `name` template. Repeated builds ride the bundler's own persistent cache; the loader's disk cache is off by default and turned on with `cache: true`.
-     </TabItem>
-   </Tabs>
+    <Tabs syncKey="bundler">
+      <TabItem label="Vite">
+        They land in `dist/assets`. The second build is much faster - variants are cached on disk in `node_modules/.vite/srcset`, and the cache is on by default.
+      </TabItem>
+      <TabItem label="Webpack and Rspack">
+        They land wherever `output.path` points, named by the loader's `name` template. Repeated builds ride the bundler's own persistent cache; the loader's disk cache is off by default and turned on with `cache: true`.
+      </TabItem>
+    </Tabs>
 
-2. **Log the variants** the module carries:
+2.  **Log the variants** the module carries:
 
-   ```ts
-   import { srcSet } from './photo.jpg'
+    ```ts
+    import { srcSet } from './photo.jpg'
 
-   console.log(srcSet.length, srcSet.map(variant => variant.id))
-   // 6 [ 'jpg1600', 'jpg800', 'webp1600', 'webp800', 'avif1600', 'avif800' ]
-   ```
+    console.log(srcSet.length, srcSet.map(variant => variant.id))
+    // 6 [ 'jpg1600', 'jpg800', 'webp1600', 'webp800', 'avif1600', 'avif800' ]
+    ```
 
-   The count is widths times formats - six for the rule above, here on a 1600px wide source. A `0` means no rule matched the image.
+    The count is widths times formats - six for the rule above, here on a 1600px wide source. A `0` means no rule matched the image.
 
-3. **Check the rendered markup**: a `<picture>` with one `<source>` per format and an `<img>` with a `srcset` of the fallback format, or - without the components - an `<img>` whose `srcset` lists every width.
+3.  **Check the rendered markup**: a `<picture>` with one `<source>` per format and an `<img>` with a `srcset` of the fallback format, or - without the components - an `<img>` whose `srcset` lists every width.
 
-4. **Type-check** with `tsc --noEmit`, so a missing ambient reference does not survive until the next build.
+4.  **Type-check** with `tsc --noEmit`, so a missing ambient reference does not survive until the next build.
 
 </Steps>
