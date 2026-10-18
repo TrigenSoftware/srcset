@@ -37,8 +37,10 @@
   --sl-color-accent-high: hsl(var(--sl-hue-accent), 95%, 70%);
 
   --sl-color-text: var(--sl-color-white);
-  /* The gold is a surface, never text: it fills the button and underlines
-     links, while the link token itself stays a readable warm grey. */
+  /**
+   * The gold is a surface, never text: it fills the button and underlines
+   * links, while the link token itself stays a readable warm grey.
+   */
   --sl-color-text-accent: hsl(38, 10%, 76%);
   --sl-color-link-underline: hsl(var(--sl-hue-accent), 55%, 48%);
   --sl-color-link-underline-hover: hsl(var(--sl-hue-accent), 95%, 68%);
@@ -57,9 +59,11 @@
 
   & .expressive-code .frame {
     --code-background: var(--sl-color-bg-nav);
-    /* Retint Expressive Code's frame chrome (tab, title bar) to the warm theme
-       so the title tab blends with the code background instead of the stock
-       near-black GitHub tab. References --code-background so light mode follows. */
+    /**
+     * Retint Expressive Code's frame chrome (tab, title bar) to the warm theme
+     * so the title tab blends with the code background instead of the stock
+     * near-black GitHub tab. References --code-background so light mode follows.
+     */
     --ec-frm-edBg: var(--code-background);
     --ec-frm-edActTabBg: var(--code-background);
     --ec-frm-trmTtbBg: var(--code-background);
@@ -107,9 +111,11 @@
   --sl-color-accent: hsl(var(--sl-hue-accent), 97%, 56%); /* Gold accent */
   --sl-color-accent-low: hsl(var(--sl-hue-accent), 90%, 88%);
 
-  /* The accent is a surface colour: bright gold under dark text. As text on
-     the paper it would have to drop to ~30% lightness to pass contrast, and
-     gold that dark is brown - so accented text stays ink instead. */
+  /**
+   * The accent is a surface colour: bright gold under dark text. As text on
+   * the paper it would have to drop to ~30% lightness to pass contrast, and
+   * gold that dark is brown - so accented text stays ink instead.
+   */
   --sl-color-text-accent: var(--sl-color-text);
   --sl-color-link-underline: hsl(38, 100%, 46%);
   --sl-color-link-underline-hover: hsl(45, 100%, 56%);
@@ -136,9 +142,11 @@
   }
 }
 
-/* Option E: the gold is a surface, not a text colour. It fills the primary
-   button under dark text and underlines links, while the link text itself
-   keeps the readable graphite of --sl-color-text-accent. */
+/**
+ * Option E: the gold is a surface, not a text colour. It fills the primary
+ * button under dark text and underlines links, while the link text itself
+ * keeps the readable graphite of --sl-color-text-accent.
+ */
 .sl-link-button.primary {
   background: var(--sl-color-accent);
   border-color: var(--sl-color-accent);
@@ -150,18 +158,22 @@
 }
 
 .sl-markdown-content a:not(:where(.not-content *)) {
-  /* The gold underline is the accent, so the link text stays the body text:
-     `--sl-color-text-accent` also paints the current sidebar item, and a value
-     dark enough to sit under cream there reads as dimmed grey in a paragraph. */
+  /**
+   * The gold underline is the accent, so the link text stays the body text:
+   * `--sl-color-text-accent` also paints the current sidebar item, and a value
+   * dark enough to sit under cream there reads as dimmed grey in a paragraph.
+   */
   color: var(--sl-color-text);
   text-decoration-color: var(--sl-color-link-underline);
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
 
-/* Starlight paints the current sidebar item from the link token under
-   `--sl-color-text-invert`. The accent is a surface in this theme, so the
-   item takes the bright accent and dark text, like the primary button. */
+/**
+ * Starlight paints the current sidebar item from the link token under
+ * `--sl-color-text-invert`. The accent is a surface in this theme, so the
+ * item takes the bright accent and dark text, like the primary button.
+ */
 nav [aria-current='page'],
 nav [aria-current='page']:hover,
 nav [aria-current='page']:focus {
@@ -169,8 +181,10 @@ nav [aria-current='page']:focus {
   color: var(--sl-color-button-text);
 }
 
-/* The table of contents marks its current entry with the same token, and
-   there it is text - so it takes weight rather than colour. */
+/**
+ * The table of contents marks its current entry with the same token, and
+ * there it is text - so it takes weight rather than colour.
+ */
 starlight-toc a[aria-current='true'] {
   font-weight: 600;
 }
