@@ -148,25 +148,25 @@ This is the part that breaks first, and none of it lives in the code.
 
 <Steps>
 
-1. **Enable transformations on the zone.**
+1.  **Enable transformations on the zone.**
 
-   In the Cloudflare dashboard open the zone, go to **Images** and then **Transformations**, and turn them on. Until then `/cdn-cgi/image/...` is just a 404 path on the site. The urls also have to reach Cloudflare at all: the hostname serving them must be proxied, the orange cloud in DNS.
+    In the Cloudflare dashboard open the zone, go to **Images** and then **Transformations**, and turn them on. Until then `/cdn-cgi/image/...` is just a 404 path on the site. The urls also have to reach Cloudflare at all: the hostname serving them must be proxied, the orange cloud in DNS.
 
-2. **Allow the external origins.**
+2.  **Allow the external origins.**
 
-   Out of the box a zone transforms only images from itself. Images on another hostname - a headless CMS, an object storage bucket, a separate asset CDN, which is exactly the case this package exists for - are refused until that hostname is listed among the zone's allowed origins in the same Transformations panel, or the zone is set to accept any origin.
+    Out of the box a zone transforms only images from itself. Images on another hostname - a headless CMS, an object storage bucket, a separate asset CDN, which is exactly the case this package exists for - are refused until that hostname is listed among the zone's allowed origins in the same Transformations panel, or the zone is set to accept any origin.
 
-   The alternative is to not have an external origin: serve the images through a path on the zone, with a route or a worker in front of the storage, and hand the adapter a `/media/...` path instead of an absolute url.
+    The alternative is to not have an external origin: serve the images through a path on the zone, with a route or a worker in front of the storage, and hand the adapter a `/media/...` path instead of an absolute url.
 
-3. **Point the endpoint at the zone.**
+3.  **Point the endpoint at the zone.**
 
-   The default `/cdn-cgi/image` is relative, so it resolves against whatever host serves the page. That is right when the site is on the zone, and wrong everywhere else - a preview deployment on another host, a native app, an email. Give those an absolute endpoint on the zone:
+    The default `/cdn-cgi/image` is relative, so it resolves against whatever host serves the page. That is right when the site is on the zone, and wrong everywhere else - a preview deployment on another host, a native app, an email. Give those an absolute endpoint on the zone:
 
-   ```ts
-   export const cloudflare = new Cloudflare({
-     endpoint: 'https://example.com/cdn-cgi/image'
-   })
-   ```
+    ```ts
+    export const cloudflare = new Cloudflare({
+      endpoint: 'https://example.com/cdn-cgi/image'
+    })
+    ```
 
 </Steps>
 
